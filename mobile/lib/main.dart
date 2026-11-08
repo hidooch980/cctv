@@ -129,10 +129,10 @@ class _DashboardPageState extends State<DashboardPage> {
           TextField(controller:name,decoration:InputDecoration(labelText:label('name'))),
           TextField(controller:brand,decoration:InputDecoration(labelText:label('brand'))),
           TextField(controller:model,decoration:InputDecoration(labelText:label('model'))),
-          DropdownButtonFormField<String>(value:type,decoration:InputDecoration(labelText:label('type')),
+          DropdownButtonFormField<String>(initialValue:type,decoration:InputDecoration(labelText:label('type')),
             items:const [DropdownMenuItem(value:'dvr',child:Text('DVR')),DropdownMenuItem(value:'nvr',child:Text('NVR')),DropdownMenuItem(value:'xvr',child:Text('XVR'))],
             onChanged:(v){if(v!=null)refresh(()=>type=v);}),
-          DropdownButtonFormField<String>(value:method,decoration:InputDecoration(labelText:label('method')),
+          DropdownButtonFormField<String>(initialValue:method,decoration:InputDecoration(labelText:label('method')),
             items:[DropdownMenuItem(value:'ip',child:Text(label('ip'))),DropdownMenuItem(value:'serial',child:Text(label('serial')))],
             onChanged:(v){if(v!=null)refresh(()=>method=v);}),
           if(method=='ip') ...[

@@ -1,0 +1,19 @@
+# Example only. Bind media listeners to private interfaces and firewall them.
+# The API callback must be reachable only over the private Docker/VPN network.
+logLevel: info
+api: false
+metrics: false
+pprof: false
+
+authMethod: http
+authHTTPAddress: http://api:8000/api/v1/media/mediamtx/auth
+# Do not exclude any action: the backend rejects publish, playback, API and metrics.
+authHTTPExclude: []
+
+# Enable only the transports that the deployment has explicitly firewalled.
+webrtc: yes
+webrtcAddress: :8889
+hls: yes
+hlsAddress: :8888
+
+# No default anonymous users and no public control API.

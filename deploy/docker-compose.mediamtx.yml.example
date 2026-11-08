@@ -1,0 +1,66 @@
+# Deployment template only. Review firewall, TLS reverse proxy, backups,
+# secrets, and pinned image digests before production use.
+services:
+  api:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      MOLIDO_CCTV_ENVIRONMENT: production
+      MOLIDO_CCTV_DATABASE_PATH: /data/cameras.db
+      MOLIDO_CCTV_AUTH_DATABASE_PATH: /data/auth.sqlite3
+      MOLIDO_CCTV_BOOTSTRAP_SECRET: ${MOLIDO_CCTV_BOOTSTRAP_SECRET:?Set a strong one-time bootstrap secret in the host environment}
+      MOLIDO_CCTV_MEDIAMTX_ENABLED: ${MOLIDO_CCTV_MEDIAMTX_ENABLED:-false}
+      MOLIDO_CCTV_MEDIAMTX_PLAYBACK_ENABLED: ${MOLIDO_CCTV_MEDIAMTX_PLAYBACK_ENABLED:-false}
+      MOLIDO_CCTV_MEDIAMTX_ALLOWED_CIDRS: 172.30.40.3/32
+    volumes:
+      - cctv-data:/data
+    ports:
+      - "127.0.0.1:8000:8000"
+    networks:
+      default: {}
+      media-private:
+        ipv4_address: 172.30.40.2
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  mediamtx:
+    image: ${MEDIAMTX_IMAGE:-bluenviron/mediamtx:1}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - ./mediamtx.yml.example:/mediamtx.yml:ro
+    networks:
+      media-private:
+        ipv4_address: 172.30.40.3
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Intentionally no public media/control/metrics ports are published here.
+    # Add only after a TLS/WSS reverse proxy, WebRTC ICE routing and firewall
+    # rules have been reviewed and tested.
+
+networks:
+  default: {}
+  media-private:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.40.0/29
+
+volumes:
+  cctv-data:

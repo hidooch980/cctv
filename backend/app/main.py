@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, SecretStr, field_validator, model_validat
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.adapters import registry
-from app.streaming import DisabledStreamProvider, ProviderNotConfigured, StreamProfile, StreamTransport, StreamStartCommand
+from app.streaming import StreamProfile, StreamTransport
 
 
 class Settings(BaseSettings):
@@ -496,21 +496,13 @@ async def start_stream_session(
             status_code=409,
             detail="No validated RTSP ingest URI is available for this channel. Run device discovery first.",
         )
-    provider = DisabledStreamProvider()
-    try:
-        from datetime import datetime, timedelta, timezone
-        command = StreamStartCommand(
-            tenant_id="unassigned",
-            user_id="unauthenticated",
-            recorder_id=recorder_id,
-            channel_id=channel_id,
-            transport=payload.transport,
-            profile=payload.profile,
-            expires_at=datetime.now(timezone.utc) + timedelta(seconds=payload.session_ttl_seconds),
-        )
-        await provider.start(command)
-    except ProviderNotConfigured as exc:
-        raise HTTPException(
-            status_code=503,
-            detail=f"{exc} A production session is not issued; no stream is active.",
-        ) from exc
+    # Fail closed before constructing a session: production tenant/user authorization
+    # and an authenticated media provider are not implemented yet.
+    raise HTTPException(
+        status_code=503,
+        detail=(
+            "Streaming is disabled until production user/site authorization and an "
+            "authenticated media provider are configured. No production session was "
+            "issued; no stream is active."
+        ),
+    )

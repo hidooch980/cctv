@@ -58,11 +58,59 @@ class _DashboardPageState extends State<DashboardPage> {
   String language = 'fa';
   String t(String key) => tr(language, key);
   TextDirection get pageDirection => language == 'fa' || language == 'ar' ? TextDirection.rtl : TextDirection.ltr;
+  final recorders = <Map<String,dynamic>>[];
   final cameras = <CameraItem>[
     CameraItem(name: 'ورودی اصلی', brand: 'Dahua', host: '192.168.1.101', status: 'demo'),
     CameraItem(name: 'پارکینگ', brand: 'Dahua', host: '192.168.1.102', status: 'demo'),
     CameraItem(name: 'انبار', brand: 'ONVIF', host: '192.168.1.103', status: 'demo'),
   ];
+
+
+  Future<void> syncRecorders() async {
+    try {
+      final res = await http.get(Uri.parse('$apiBase/api/v1/recorders')).timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) throw Exception('HTTP \${res.statusCode}');
+      final data = (jsonDecode(res.body) as List).cast<Map<String,dynamic>>();
+      if (mounted) setState(() { recorders..clear()..addAll(data); });
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content:Text(language=='fa'?'دریافت فهرست دستگاه‌های ضبط ناموفق بود':'Could not load recorder list')));
+    }
+  }
+
+  Future<void> testRecorder(Map<String,dynamic> recorder) async {
+    final username = TextEditingController();
+    final password = TextEditingController();
+    final ok = await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
+      backgroundColor:panel,
+      title:Text(language=='fa'?'آزمون اتصال دستگاه':'Test recorder connection'),
+      content:Column(mainAxisSize:MainAxisSize.min,children:[
+        TextField(controller:username,decoration:InputDecoration(labelText:language=='fa'?'نام کاربری':'Username')),
+        TextField(controller:password,obscureText:true,decoration:InputDecoration(labelText:language=='fa'?'رمز عبور':'Password')),
+      ]),
+      actions:[
+        TextButton(onPressed:()=>Navigator.pop(ctx,false),child:Text(language=='fa'?'انصراف':'Cancel')),
+        FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:Text(language=='fa'?'آزمایش':'Test')),
+      ],
+    ));
+    if(ok==true) {
+      try {
+        final response=await http.post(Uri.parse('$apiBase/api/v1/recorders/\${recorder['id']}/connect-test'),
+          headers:{'Content-Type':'application/json'},
+          body:jsonEncode({'username':username.text,'password':password.text})).timeout(const Duration(seconds:20));
+        if(response.statusCode!=200) throw Exception('HTTP \${response.statusCode}');
+        final result=jsonDecode(response.body) as Map<String,dynamic>;
+        final count=result['channel_count']??0;
+        if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(
+          language=='fa'?'اتصال: موفق • کانال‌های شناسایی‌شده: $count':'Connected • Discovered channels: $count')));
+        await syncRecorders();
+      } catch (_) {
+        if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(
+          language=='fa'?'اتصال برقرار نشد؛ IP، پورت، دسترسی ONVIF و رمز را بررسی کنید':'Connection failed; check IP, port, ONVIF access and credentials')));
+      }
+    }
+    username.dispose();password.dispose();
+  }
 
   Future<void> syncCameras() async {
     setState(() { connecting = true; connection = t('connecting'); });
@@ -167,7 +215,25 @@ class _DashboardPageState extends State<DashboardPage> {
         final response = await http.post(Uri.parse('$apiBase/api/v1/recorders'),
           headers:{'Content-Type':'application/json'},body:jsonEncode(payload)).timeout(const Duration(seconds:8));
         if (response.statusCode != 201) throw Exception('HTTP \${response.statusCode}');
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(label('saved'))));
+        final created = jsonDecode(response.body) as Map<String,dynamic>;
+        if(method=='ip') {
+          final tested=await http.post(Uri.parse('$apiBase/api/v1/recorders/\${created['id']}/connect-test'),
+            headers:{'Content-Type':'application/json'},
+            body:jsonEncode({'username':username.text.trim(),'password':password.text})).timeout(const Duration(seconds:20));
+          if(tested.statusCode==200) {
+            final result=jsonDecode(tested.body) as Map<String,dynamic>;
+            final count=result['channel_count']??0;
+            if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(
+              language=='fa'?'دستگاه ثبت شد؛ کانال شناسایی‌شده: $count':'Recorder saved; channels discovered: $count')));
+          } else {
+            if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(
+              language=='fa'?'دستگاه ثبت شد اما اتصال برقرار نشد':'Recorder saved, but connection test failed')));
+          }
+        } else {
+          if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(
+            language=='fa'?'سریال ثبت شد؛ آداپتور P2P سازنده هنوز نیازمند SDK است':'Serial saved; manufacturer P2P SDK adapter is still required')));
+        }
+        await syncRecorders();
       } catch (_) {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(label('failed'))));
       }
@@ -257,9 +323,22 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget _cameraList()=>ListView(padding:const EdgeInsets.all(16),children:[
     Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[Text(t('manage'),style:TextStyle(fontSize:19,fontWeight:FontWeight.bold)),Text('${cameras.length} ${t('device')}',style:const TextStyle(color:Colors.white54))]),
     const SizedBox(height:12),
+    const SizedBox(height:12),
+    Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
+      Text(language=='fa'?'دستگاه‌های ضبط':'Recorders',style:TextStyle(fontSize:17,fontWeight:FontWeight.bold)),
+      TextButton(onPressed:syncRecorders,child:Text(language=='fa'?'بروزرسانی':'Refresh')),
+    ]),
+    ...recorders.map((r)=>Card(child:ListTile(
+      leading:const Icon(Icons.dvr,color:brandRed),
+      title:Text('\${r['name']} • \${r['recorder_type'].toString().toUpperCase()}'),
+      subtitle:Text('\${r['brand']} • \${r['connection_method']} • \${r['status']}\\n\${r['host']??r['serial_number']??''}',style:const TextStyle(fontSize:11)),
+      isThreeLine:true,
+      trailing:IconButton(icon:const Icon(Icons.wifi_tethering),tooltip:language=='fa'?'تست اتصال':'Test connection',
+        onPressed:()=>testRecorder(r)),
+    ))),
     ...cameras.map((c)=>Card(child:ListTile(leading:Container(width:42,height:42,decoration:BoxDecoration(color:brandRed.withValues(alpha:.13),borderRadius:BorderRadius.circular(12)),child:const Icon(Icons.videocam,color:brandRed)),title:Text(c.name),subtitle:Text('${c.brand}  •  ${c.host}\n${c.location}',style:const TextStyle(fontSize:11)),isThreeLine:true,trailing:const Icon(Icons.chevron_left)))),
     const SizedBox(height:12),FilledButton.icon(style:FilledButton.styleFrom(backgroundColor:brandRed),onPressed:addRecorder,icon:const Icon(Icons.dvr),label:Text(language=='fa'?'افزودن DVR / NVR':language=='ar'?'إضافة DVR / NVR':language=='tr'?'DVR / NVR ekle':'Add DVR / NVR')),
-    const SizedBox(height:8),OutlinedButton.icon(onPressed:connecting?null:syncCameras,icon:const Icon(Icons.sync),label:Text(connecting?t('syncing'):t('syncServer'))),
+    const SizedBox(height:8),OutlinedButton.icon(onPressed:connecting?null:(){syncCameras();syncRecorders();},icon:const Icon(Icons.sync),label:Text(connecting?t('syncing'):t('syncServer'))),
   ]);
 
   Widget _events()=>ListView(padding:const EdgeInsets.all(16),children:[

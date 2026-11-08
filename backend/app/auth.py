@@ -163,7 +163,8 @@ def login(path: str | Path, *, email: str, password: str, tenant_slug: str,
                           VALUES(?,?,?,?) ON CONFLICT(identity) DO UPDATE SET
                           failures=excluded.failures,window_started_at=excluded.window_started_at,
                           locked_until=excluded.locked_until""", (identity, failures, started, locked))
-            raise AuthError("invalid_credentials")
+            db.commit()
+            raise AuthError("login_rate_limited" if locked else "invalid_credentials")
         db.execute("DELETE FROM login_attempts WHERE identity=?", (identity,))
         issued = issue_session_token(ttl_seconds=ttl_seconds, now=current)
         session_id = str(uuid4())

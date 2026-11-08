@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import ipaddress
+from datetime import datetime, timezone
 from contextvars import ContextVar
 from contextlib import contextmanager
 from enum import Enum
@@ -15,7 +17,7 @@ from pydantic import BaseModel, Field, SecretStr, field_validator, model_validat
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.adapters import registry
-from app.auth import AuthError, init_auth_schema, resolve_principal, router as auth_router
+from app.auth import AuthError, init_auth_schema, resolve_principal, verify_media_token, router as auth_router
 from app.streaming import StreamProfile, StreamTransport
 
 
@@ -31,6 +33,11 @@ app = FastAPI(title=settings.app_name, version="0.3.0", docs_url="/api/docs")
 _tenant_database: ContextVar[str | None] = ContextVar("tenant_database", default=None)
 app.state.auth_database_path = os.getenv("MOLIDO_CCTV_AUTH_DATABASE_PATH", settings.database_path)
 app.state.bootstrap_secret = os.getenv("MOLIDO_CCTV_BOOTSTRAP_SECRET")
+app.state.mediamtx_enabled = os.getenv("MOLIDO_CCTV_MEDIAMTX_ENABLED", "false").lower() == "true"
+app.state.mediamtx_allowed_cidrs = [
+    item.strip() for item in os.getenv("MOLIDO_CCTV_MEDIAMTX_ALLOWED_CIDRS", "").split(",")
+    if item.strip()
+]
 
 
 class CameraProtocol(str, Enum):
@@ -237,10 +244,54 @@ def tenant_database_path(tenant_id: str) -> str:
     return str(root / tenant_id / "cameras.sqlite3")
 
 
+class MediaMTXAuthRequest(BaseModel):
+    user: str = Field(default="", max_length=254)
+    password: str = Field(default="", max_length=512)
+    token: str = Field(default="", max_length=512)
+    ip: str = Field(default="", max_length=64)
+    action: str = Field(min_length=1, max_length=32)
+    path: str = Field(min_length=1, max_length=512)
+    protocol: str = Field(min_length=1, max_length=32)
+    id: str = Field(default="", max_length=128)
+    query: str = Field(default="", max_length=2048)
+    userAgent: str = Field(default="", max_length=512)
+
+
+@app.post("/api/v1/media/mediamtx/auth", include_in_schema=False)
+def mediamtx_external_auth(payload: MediaMTXAuthRequest, request: Request):
+    """MediaMTX external HTTP auth callback; private-network-only and deny by default."""
+    if not app.state.mediamtx_enabled or not app.state.mediamtx_allowed_cidrs:
+        raise HTTPException(status_code=503, detail="MediaMTX external authentication is not enabled")
+    remote = request.client.host if request.client else ""
+    try:
+        remote_ip = ipaddress.ip_address(remote)
+        allowed = any(remote_ip in ipaddress.ip_network(cidr, strict=False)
+                      for cidr in app.state.mediamtx_allowed_cidrs)
+    except ValueError:
+        allowed = False
+    if not allowed:
+        raise HTTPException(status_code=403, detail="MediaMTX callback source is not trusted")
+    credential = payload.token or payload.password
+    if not credential:
+        raise HTTPException(status_code=401, detail="MediaMTX credentials required")
+    try:
+        expires_at = verify_media_token(
+            app.state.auth_database_path, token=credential,
+            media_path=payload.path, action=payload.action,
+            protocol=payload.protocol,
+        )
+    except AuthError:
+        raise HTTPException(status_code=401, detail="MediaMTX authorization denied")
+    return {"expireAt": datetime.fromtimestamp(expires_at, timezone.utc).isoformat().replace("+00:00", "Z")}
+
+
 @app.middleware("http")
 async def authenticate_and_isolate_tenant(request: Request, call_next):
     path = request.url.path
-    public_paths = {"/api/health", "/api/v1/auth/bootstrap", "/api/v1/auth/login"}
+    public_paths = {
+        "/api/health", "/api/v1/auth/bootstrap", "/api/v1/auth/login",
+        "/api/v1/media/mediamtx/auth",
+    }
     if path in public_paths or not path.startswith("/api/v1/"):
         return await call_next(request)
 

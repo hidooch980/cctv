@@ -24,6 +24,9 @@ jobs:
         working-directory: mobile
       - run: flutter test
         working-directory: mobile
+      - name: Generate missing Android platform scaffolding (v2 embedding)
+        run: flutter create --platforms=android --org=com.molido --project-name=molido_cctv .
+        working-directory: mobile
       - run: flutter build apk --debug
         working-directory: mobile
       - uses: actions/upload-artifact@v4

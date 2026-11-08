@@ -228,14 +228,14 @@ class _DashboardPageState extends State<DashboardPage> {
           'username':username.text.trim().isEmpty?null:username.text.trim(),
           'password':(method=='ip'||method=='dahua_p2p')?password.text:null,
         };
+        if(method=='dahua_p2p' && Uri.parse(apiBase).scheme!='https') {
+          throw Exception('P2P credentials require HTTPS');
+        }
         final response = await http.post(Uri.parse('$apiBase/api/v1/recorders'),
           headers:{'Content-Type':'application/json'},body:jsonEncode(payload)).timeout(const Duration(seconds:8));
         if (response.statusCode != 201) throw Exception('HTTP ${response.statusCode}');
         final created = jsonDecode(response.body) as Map<String,dynamic>;
         final createdId = created['id'].toString();
-        if(method=='dahua_p2p' && Uri.parse(apiBase).scheme!='https') {
-          throw Exception('P2P credentials require HTTPS');
-        }
         if(method=='ip') {
           final tested=await http.post(Uri.parse('$apiBase/api/v1/recorders/$createdId/connect-test'),
             headers:{'Content-Type':'application/json'},

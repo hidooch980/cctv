@@ -207,8 +207,14 @@ class _DashboardPageState extends State<DashboardPage> {
         return;
       }
       final assets = (release['assets'] as List<dynamic>? ?? []);
-      final apk = assets.cast<Map<String, dynamic>?>().where((a) => a != null && (a['name'] ?? '').toString().endsWith('.apk')).firstOrNull;
-      final url = (apk?['browser_download_url'] ?? release['html_url'] ?? '').toString();
+      String? apkUrl;
+      for (final asset in assets) {
+        if (asset is Map && (asset['name'] ?? '').toString().endsWith('.apk')) {
+          apkUrl = asset['browser_download_url']?.toString();
+          break;
+        }
+      }
+      final url = apkUrl ?? release['html_url']?.toString() ?? '';
       if (!mounted || url.isEmpty) return;
       showDialog<void>(context: context, builder: (ctx) => AlertDialog(
         backgroundColor: panel,

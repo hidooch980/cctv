@@ -301,7 +301,7 @@ def test_viewer_can_read_but_cannot_modify_inventory():
         "role": "viewer",
     })
     assert created_user.status_code == 201
-    token, _ = main_module.login(
+    token, _ = login(
         app.state.auth_database_path, email="viewer@example.test",
         password="viewer password long enough", tenant_slug="test-site",
     )
@@ -332,7 +332,7 @@ def test_tenant_data_isolation_uses_separate_database_files(tmp_path):
         db.execute("INSERT INTO memberships(user_id,tenant_id,role,created_at) VALUES(?,?,?,?)",
                    (admin_id, second_tenant, "manager", int(time.time())))
 
-    second_token, _ = main_module.login(
+    second_token, _ = login(
         app.state.auth_database_path, email="admin@example.test",
         password="test manager password long", tenant_slug="second-site",
     )

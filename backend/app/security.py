@@ -23,8 +23,8 @@ def hash_password(password: str, *, iterations: int = _PASSWORD_ITERATIONS) -> s
     """Return a salted PBKDF2-SHA256 password hash suitable for database storage."""
     if not isinstance(password, str) or len(password) < 12 or len(password) > 1024:
         raise ValueError("password must contain between 12 and 1024 characters")
-    if iterations < 100_000:
-        raise ValueError("password hashing work factor is too low")
+    if not 100_000 <= iterations <= 2_000_000:
+        raise ValueError("password hashing work factor must be between 100000 and 2000000")
     salt = secrets.token_bytes(_SALT_BYTES)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
     salt_text = base64.urlsafe_b64encode(salt).decode("ascii").rstrip("=")

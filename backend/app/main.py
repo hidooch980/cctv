@@ -565,7 +565,8 @@ def streaming_capabilities() -> dict:
     """Expose the honest media-plane state; no live provider is configured yet."""
     return {
         "control_plane": "available",
-        "media_provider": "mediamtx" if app.state.mediamtx_enabled else "disabled",
+        "media_provider": "disabled",
+        "external_auth_callback": "enabled" if app.state.mediamtx_enabled and bool(app.state.mediamtx_allowed_cidrs) else "disabled",
         "playback_token_issuance": app.state.mediamtx_playback_enabled and bool(app.state.mediamtx_allowed_cidrs),
         "live_view": False,
         "transports": [],
@@ -615,7 +616,7 @@ def issue_playback_token(
         "transport": payload.transport.value,
         "profile": payload.profile.value,
         "expires_at": expires_at,
-        "gateway_configured": True,
+        "gateway_configured": False,
         "playback_url": None,
         "note": "Token only. The gateway path/source and client playback URL must be configured before video can play.",
     }

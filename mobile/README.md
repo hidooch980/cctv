@@ -3,7 +3,8 @@
 The first Flutter Android shell is a **test UI**, branded with a Dahua-compatible visual direction. It is not an official Dahua application and does not imply Dahua endorsement.
 
 ## Included in 0.1.0
-- Persian RTL dashboard and bottom navigation
+- Four-language dashboard: Persian (RTL), English (LTR), Arabic (RTL), and Turkish (LTR), switchable from Settings
+- Localized navigation, dashboard metrics, camera management, events, alerts, and settings
 - Camera inventory cards and add-camera flow
 - API sync with the FastAPI inventory endpoints
 - Editable central server URL

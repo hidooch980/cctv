@@ -291,7 +291,7 @@ def test_playback_token_issuance_is_disabled_by_default_and_path_scoped_when_ena
             f"tenant/{app.state.test_tenant_id}/recorder/{recorder_id}/channel/{channel_id}/sub"
         )
         assert body["playback_url"] is None
-        assert body["gateway_configured"] is True
+        assert body["gateway_configured"] is False
         expiry = verify_media_token(
             app.state.auth_database_path, token=body["token"],
             media_path=body["media_path"], action="read", protocol="webrtc",

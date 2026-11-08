@@ -84,9 +84,9 @@ class _DashboardPageState extends State<DashboardPage> {
     final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
       backgroundColor: panel, title: Text(t('add')),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: name, decoration: const InputDecoration(labelText: t('cameraName'))),
-        TextField(controller: host, decoration: const InputDecoration(labelText: t('host'), hintText: '192.168.1.100')),
-        TextField(controller: brand, decoration: const InputDecoration(labelText: t('brand'))),
+        TextField(controller: name, decoration: InputDecoration(labelText: t('cameraName'))),
+        TextField(controller: host, decoration: InputDecoration(labelText: t('host'), hintText: '192.168.1.100')),
+        TextField(controller: brand, decoration: InputDecoration(labelText: t('brand'))),
       ]),
       actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(t('cancel'))), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(t('save')))],
     ));
@@ -153,7 +153,7 @@ class _DashboardPageState extends State<DashboardPage> {
       gradient:const LinearGradient(colors:[Color(0xFF292D35),Color(0xFF171A20)]),
       borderRadius:BorderRadius.circular(20),border:Border.all(color:Colors.white10)),
       child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Row(children:[const Expanded(child:Text(t('center'),style:TextStyle(fontSize:20,fontWeight:FontWeight.bold))),_statusDot()]),
+        Row(children:[Expanded(child:Text(t('center'),style:TextStyle(fontSize:20,fontWeight:FontWeight.bold))),_statusDot()]),
         const SizedBox(height:6),Text(connection,style:const TextStyle(color:Colors.white60,fontSize:12)),
         const SizedBox(height:18),Row(children:[
           _metric(t('total'),'${cameras.length}',Icons.videocam_outlined),
@@ -164,7 +164,7 @@ class _DashboardPageState extends State<DashboardPage> {
     ),
     const SizedBox(height:20),
     Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
-      const Text(t('live'),style:TextStyle(fontSize:17,fontWeight:FontWeight.bold)),
+      Text(t('live'),style:TextStyle(fontSize:17,fontWeight:FontWeight.bold)),
       TextButton(onPressed:()=>setState(()=>selectedTab=1),child:Text(t('all'))),
     ]),
     GridView.builder(shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),itemCount:cameras.take(4).length,
@@ -172,7 +172,7 @@ class _DashboardPageState extends State<DashboardPage> {
       itemBuilder:(context,i)=>_previewCard(cameras[i])),
     const SizedBox(height:16),
     Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:panel,borderRadius:BorderRadius.circular(16)),
-      child:const Row(children:[Icon(Icons.info_outline,color:brandRed),SizedBox(width:10),Expanded(child:Text(t('demo'),style:TextStyle(fontSize:12,color:Colors.white70)))])),
+      child:Row(children:[Icon(Icons.info_outline,color:brandRed),SizedBox(width:10),Expanded(child:Text(t('demo'),style:TextStyle(fontSize:12,color:Colors.white70)))])),
   ]);
 
   Widget _metric(String label,String value,IconData icon)=>Expanded(child:Container(padding:const EdgeInsets.all(10),decoration:BoxDecoration(color:Colors.white.withOpacity(.05),borderRadius:BorderRadius.circular(14)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Icon(icon,color:brandRed,size:19),const SizedBox(height:8),Text(value,style:const TextStyle(fontSize:21,fontWeight:FontWeight.bold)),Text(label,style:const TextStyle(fontSize:10,color:Colors.white60))])));
@@ -199,7 +199,7 @@ class _DashboardPageState extends State<DashboardPage> {
     Card(child:ListTile(leading:const Icon(Icons.dns_outlined,color:brandRed),title:Text(t('server')),subtitle:Text(apiBase),trailing:const Icon(Icons.edit),onTap:editServer)),
     Card(child:ListTile(leading:const Icon(Icons.language,color:brandRed),title:Text(t('language')),trailing:DropdownButton<String>(value:language,items:const [DropdownMenuItem(value:'fa',child:Text('فارسی')),DropdownMenuItem(value:'en',child:Text('English')),DropdownMenuItem(value:'ar',child:Text('العربية')),DropdownMenuItem(value:'tr',child:Text('Türkçe'))],onChanged:(v){if(v!=null)setState(()=>language=v);}))),
     Card(child:ListTile(leading:const Icon(Icons.security,color:brandRed),title:Text(t('security')),subtitle:Text(t('credentialNote')))),
-    const Card(child:ListTile(leading:Icon(Icons.info_outline,color:brandRed),title:Text(t('version')),subtitle:Text('0.1.0 • Android Test'))),
+    Card(child:ListTile(leading:const Icon(Icons.info_outline,color:brandRed),title:Text(t('version')),subtitle:const Text('0.1.0 • Android Test'))),
     const SizedBox(height:10),FilledButton.icon(style:FilledButton.styleFrom(backgroundColor:brandRed),onPressed:syncCameras,icon:const Icon(Icons.link),label:Text(t('check'))),
   ]);
 }

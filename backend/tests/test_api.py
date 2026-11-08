@@ -179,7 +179,7 @@ def test_connection_test_discovers_and_persists_channels_without_credentials(mon
     assert channels.status_code == 200
     assert channels.json()[0]["name"] == "Front Door"
     assert "transient-secret" not in channels.text
-    with sqlite3.connect(app.state.database_path) as db:
+    with sqlite3.connect(tenant_database_path(app.state.test_tenant_id)) as db:
         stored = " ".join(str(value) for row in db.execute("SELECT * FROM recorder_channels") for value in row)
     assert "transient-secret" not in stored
 
@@ -265,7 +265,7 @@ def test_stream_session_fails_closed_until_media_provider_is_configured():
     assert created.status_code == 201
     recorder_id = created.json()["id"]
     channel_id = uuid4()
-    with main_module.db_connection() as db:
+    with sqlite3.connect(tenant_database_path(app.state.test_tenant_id)) as db:
         db.execute(
             """INSERT INTO recorder_channels
                (id,recorder_id,channel_number,name,profile_token,stream_uri,status)

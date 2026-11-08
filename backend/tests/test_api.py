@@ -343,9 +343,26 @@ def test_api_rejects_missing_bearer_token():
         for path in ("/api/v1/cameras", "/api/v1/recorders", "/api/v1/streaming/capabilities", "/api/v1/auth/me"):
             response = client.get(path)
             assert response.status_code == 401
+        assert client.post("/api/v1/cameras", json={
+            "name": "Unauthenticated", "brand": "Generic",
+            "protocol": "rtsp", "host": "192.0.2.77",
+        }).status_code == 401
+        assert client.post("/api/v1/recorders", json={
+            "name": "Unauthenticated", "brand": "Generic",
+            "recorder_type": "nvr", "connection_method": "dahua_p2p",
+            "serial_number": "SN-UNAUTH-123",
+        }).status_code == 401
     finally:
         if saved:
             client.headers.update({"Authorization": saved})
+
+
+def test_authenticated_request_cannot_override_its_tenant_header():
+    response = client.get(
+        "/api/v1/cameras",
+        headers={"X-Tenant-Id": "some-other-tenant"},
+    )
+    assert response.status_code == 401
 
 
 def test_viewer_can_read_but_cannot_modify_inventory():

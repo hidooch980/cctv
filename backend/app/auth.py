@@ -117,7 +117,7 @@ def create_member(path: str | Path, principal: Principal, *, email: str,
                   password: str, role: str) -> str:
     if not principal.allows("user:manage"):
         raise AuthError("forbidden")
-    if role not in ROLES or role == "manager":
+    if role not in ROLES:
         raise AuthError("invalid_role")
     normalized = email.strip().lower()
     if not normalized or len(normalized) > 254 or "@" not in normalized:
@@ -205,3 +205,98 @@ def logout(path: str | Path, token: str, now: int | None = None) -> None:
     with connect(path) as db:
         db.execute("UPDATE auth_sessions SET revoked_at=? WHERE token_hash=? AND revoked_at IS NULL",
                    (current, token_hash))
+
+
+# HTTP surface is mounted by the FastAPI application.
+from fastapi import APIRouter, Header, HTTPException, Request
+from pydantic import BaseModel, Field
+
+router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
+
+
+class BootstrapRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    password: str = Field(min_length=12, max_length=1024)
+    tenant_name: str = Field(min_length=1, max_length=120)
+    tenant_slug: str = Field(min_length=2, max_length=80)
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    password: str = Field(min_length=1, max_length=1024)
+    tenant_slug: str = Field(min_length=2, max_length=80)
+
+
+class CreateMemberRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    password: str = Field(min_length=12, max_length=1024)
+    role: str
+
+
+def _auth_path(request: Request) -> str:
+    return str(request.app.state.auth_database_path)
+
+
+def _auth_http_error(exc: AuthError) -> HTTPException:
+    status_code = 403 if exc.code == "forbidden" else 401
+    if exc.code in {"bootstrap_already_used", "bootstrap_conflict", "member_conflict"}:
+        status_code = 409
+    if exc.code == "login_rate_limited":
+        status_code = 429
+    if exc.code in {"invalid_email", "invalid_tenant", "invalid_role"}:
+        status_code = 422
+    return HTTPException(status_code=status_code, detail=exc.code)
+
+
+@router.post("/bootstrap", status_code=201)
+def bootstrap_endpoint(payload: BootstrapRequest, request: Request,
+                       x_bootstrap_secret: str | None = Header(default=None)) -> dict:
+    try:
+        tenant_id = bootstrap_admin(
+            _auth_path(request),
+            configured_secret=request.app.state.bootstrap_secret,
+            supplied_secret=x_bootstrap_secret or "",
+            email=payload.email, password=payload.password,
+            tenant_name=payload.tenant_name, tenant_slug=payload.tenant_slug,
+        )
+    except AuthError as exc:
+        raise _auth_http_error(exc) from exc
+    return {"tenant_id": tenant_id, "status": "created", "next_step": "Sign in with the manager account."}
+
+
+@router.post("/login")
+def login_endpoint(payload: LoginRequest, request: Request) -> dict:
+    try:
+        token, expires_at = login(
+            _auth_path(request), email=payload.email, password=payload.password,
+            tenant_slug=payload.tenant_slug,
+        )
+    except AuthError as exc:
+        raise _auth_http_error(exc) from exc
+    return {"access_token": token, "token_type": "bearer", "expires_at": expires_at}
+
+
+@router.get("/me")
+def me_endpoint(request: Request) -> dict:
+    principal = request.state.principal
+    return {"user_id": principal.user_id, "tenant_id": principal.tenant_id,
+            "email": principal.email, "role": principal.role}
+
+
+@router.post("/logout")
+def logout_endpoint(request: Request) -> dict:
+    token = request.state.bearer_token
+    logout(_auth_path(request), token)
+    return {"status": "logged_out"}
+
+
+@router.post("/users", status_code=201)
+def create_member_endpoint(payload: CreateMemberRequest, request: Request) -> dict:
+    try:
+        user_id = create_member(
+            _auth_path(request), request.state.principal,
+            email=payload.email, password=payload.password, role=payload.role,
+        )
+    except AuthError as exc:
+        raise _auth_http_error(exc) from exc
+    return {"user_id": user_id, "role": payload.role, "status": "created"}

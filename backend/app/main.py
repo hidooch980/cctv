@@ -383,6 +383,49 @@ async def test_recorder_connection(recorder_id: UUID, credentials: RecorderConne
     }
 
 
+@app.get("/api/v1/recorders/{recorder_id}/p2p-status")
+def dahua_p2p_status(recorder_id: UUID) -> dict:
+    """Report official-cloud readiness without probing private Dahua protocols."""
+    with db_connection() as db:
+        recorder = db.execute(
+            "SELECT connection_method,serial_number FROM recorders WHERE id=?",
+            (str(recorder_id),),
+        ).fetchone()
+    if recorder is None:
+        raise HTTPException(status_code=404, detail="Recorder not found")
+    if recorder["connection_method"] != RecorderConnectionMethod.dahua_p2p.value:
+        raise HTTPException(status_code=409, detail="Recorder is not registered in Dahua P2P mode")
+    return {
+        "vendor": "Dahua",
+        "connection_mode": "official_p2p_cloud",
+        "serial_number_registered": bool(recorder["serial_number"]),
+        "integration_state": "credentials_required",
+        "device_state": "unknown",
+        "online": False,
+        "sdk_connected": False,
+        "cloud_video": False,
+        "next_step": "Complete Dahua DoLynk Developer company verification and configure authorized API credentials.",
+        "credentials_persisted": False,
+    }
+
+
+@app.post("/api/v1/recorders/{recorder_id}/p2p-connect-test")
+def dahua_p2p_connect_test(recorder_id: UUID) -> dict:
+    with db_connection() as db:
+        recorder = db.execute(
+            "SELECT connection_method FROM recorders WHERE id=?",
+            (str(recorder_id),),
+        ).fetchone()
+    if recorder is None:
+        raise HTTPException(status_code=404, detail="Recorder not found")
+    if recorder["connection_method"] != RecorderConnectionMethod.dahua_p2p.value:
+        raise HTTPException(status_code=409, detail="Recorder is not registered in Dahua P2P mode")
+    raise HTTPException(
+        status_code=501,
+        detail="Official Dahua DoLynk Developer API credentials and approved adapter are not configured; no cloud connection was attempted.",
+    )
+
+
 @app.get("/api/v1/recorders/{recorder_id}/channels", response_model=list[RecorderChannelRead])
 def list_recorder_channels(recorder_id: UUID) -> list[RecorderChannelRead]:
     with db_connection() as db:

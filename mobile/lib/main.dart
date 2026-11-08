@@ -229,7 +229,7 @@ class _DashboardPageState extends State<DashboardPage> {
           return;
         }
         final response=await http.post(Uri.parse('$apiBase/api/v1/recorders/$recorderId/connect-test'),
-          headers:{'Content-Type':'application/json'},
+          headers:{...authHeaders,'Content-Type':'application/json'},
           body:jsonEncode({'username':username.text,'password':password.text})).timeout(const Duration(seconds:20));
         if(response.statusCode!=200) throw Exception('HTTP ${response.statusCode}');
         final result=jsonDecode(response.body) as Map<String,dynamic>;
@@ -349,13 +349,13 @@ class _DashboardPageState extends State<DashboardPage> {
           throw Exception('P2P credentials require HTTPS');
         }
         final response = await http.post(Uri.parse('$apiBase/api/v1/recorders'),
-          headers:{'Content-Type':'application/json'},body:jsonEncode(payload)).timeout(const Duration(seconds:8));
+          headers:{...authHeaders,'Content-Type':'application/json'},body:jsonEncode(payload)).timeout(const Duration(seconds:8));
         if (response.statusCode != 201) throw Exception('HTTP ${response.statusCode}');
         final created = jsonDecode(response.body) as Map<String,dynamic>;
         final createdId = created['id'].toString();
         if(method=='ip') {
           final tested=await http.post(Uri.parse('$apiBase/api/v1/recorders/$createdId/connect-test'),
-            headers:{'Content-Type':'application/json'},
+            headers:{...authHeaders,'Content-Type':'application/json'},
             body:jsonEncode({'username':username.text.trim(),'password':password.text})).timeout(const Duration(seconds:20));
           if(tested.statusCode==200) {
             final result=jsonDecode(tested.body) as Map<String,dynamic>;

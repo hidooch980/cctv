@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field, SecretStr, field_validator, model_validat
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.adapters import registry
-from app.auth import AuthError, init_auth_schema, resolve_principal, verify_media_token, router as auth_router
+from app.auth import AuthError, init_auth_schema, issue_media_token, resolve_principal, verify_media_token, router as auth_router
 from app.streaming import StreamProfile, StreamTransport
 
 
@@ -34,6 +34,7 @@ _tenant_database: ContextVar[str | None] = ContextVar("tenant_database", default
 app.state.auth_database_path = os.getenv("MOLIDO_CCTV_AUTH_DATABASE_PATH", settings.database_path)
 app.state.bootstrap_secret = os.getenv("MOLIDO_CCTV_BOOTSTRAP_SECRET")
 app.state.mediamtx_enabled = os.getenv("MOLIDO_CCTV_MEDIAMTX_ENABLED", "false").lower() == "true"
+app.state.mediamtx_playback_enabled = os.getenv("MOLIDO_CCTV_MEDIAMTX_PLAYBACK_ENABLED", "false").lower() == "true"
 app.state.mediamtx_allowed_cidrs = [
     item.strip() for item in os.getenv("MOLIDO_CCTV_MEDIAMTX_ALLOWED_CIDRS", "").split(",")
     if item.strip()
@@ -564,13 +565,59 @@ def streaming_capabilities() -> dict:
     """Expose the honest media-plane state; no live provider is configured yet."""
     return {
         "control_plane": "available",
-        "media_provider": "disabled",
+        "media_provider": "mediamtx" if app.state.mediamtx_enabled else "disabled",
+        "playback_token_issuance": app.state.mediamtx_playback_enabled and bool(app.state.mediamtx_allowed_cidrs),
         "live_view": False,
         "transports": [],
         "profiles": [profile.value for profile in StreamProfile],
         "session_ttl_seconds": {"minimum": 60, "maximum": 3600},
         "authorization": "production user/site authorization is a required deployment gate",
         "next_step": "Deploy and configure an authenticated media gateway and site connector.",
+    }
+
+
+@app.post("/api/v1/recorders/{recorder_id}/channels/{channel_id}/playback-token")
+def issue_playback_token(
+    recorder_id: UUID, channel_id: UUID, payload: StreamStartRequest, request: Request
+) -> dict:
+    """Issue a path-scoped short-lived token only after an operator enables the media plane."""
+    principal = request.state.principal
+    if not principal.allows("stream:view"):
+        raise HTTPException(status_code=403, detail="stream_view_forbidden")
+    if not app.state.mediamtx_enabled or not app.state.mediamtx_playback_enabled or not app.state.mediamtx_allowed_cidrs:
+        raise HTTPException(status_code=503, detail="MediaMTX playback token issuance is disabled until the private gateway is deployed and allowlisted.")
+    with db_connection() as db:
+        channel = db.execute(
+            """SELECT c.id,c.recorder_id,c.stream_uri,c.status,r.connection_method
+               FROM recorder_channels c JOIN recorders r ON r.id=c.recorder_id
+               WHERE c.id=? AND c.recorder_id=?""",
+            (str(channel_id), str(recorder_id)),
+        ).fetchone()
+    if channel is None:
+        raise HTTPException(status_code=404, detail="Recorder channel not found")
+    if channel["connection_method"] == RecorderConnectionMethod.dahua_p2p.value:
+        raise HTTPException(status_code=501, detail="Dahua P2P playback requires the officially authorized Dahua adapter.")
+    if not channel["stream_uri"] or channel["status"] not in {"discovered", "online"}:
+        raise HTTPException(status_code=409, detail="Channel has no validated, available RTSP stream.")
+    media_path = f"tenant/{principal.tenant_id}/recorder/{recorder_id}/channel/{channel_id}/{payload.profile.value}"
+    try:
+        token, expires_at = issue_media_token(
+            app.state.auth_database_path, principal, media_path=media_path,
+            ttl_seconds=min(payload.session_ttl_seconds, 900),
+        )
+    except AuthError as exc:
+        status_code = 403 if exc.code == "forbidden" else 401
+        raise HTTPException(status_code=status_code, detail=exc.code) from exc
+    return {
+        "media_path": media_path,
+        "token": token,
+        "token_type": "bearer",
+        "transport": payload.transport.value,
+        "profile": payload.profile.value,
+        "expires_at": expires_at,
+        "gateway_configured": True,
+        "playback_url": None,
+        "note": "Token only. The gateway path/source and client playback URL must be configured before video can play.",
     }
 
 

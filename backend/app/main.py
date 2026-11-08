@@ -604,6 +604,7 @@ def issue_playback_token(
     try:
         token, expires_at = issue_media_token(
             app.state.auth_database_path, principal, media_path=media_path,
+            protocol=payload.transport.value,
             ttl_seconds=min(payload.session_ttl_seconds, 900),
         )
     except AuthError as exc:

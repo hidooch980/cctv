@@ -280,3 +280,72 @@ def test_stream_session_fails_closed_until_media_provider_is_configured():
     )
     assert response.status_code == 503
     assert "no stream is active" in response.json()["detail"]
+
+
+
+def test_api_rejects_missing_bearer_token():
+    saved = client.headers.get("Authorization")
+    client.headers.pop("Authorization", None)
+    try:
+        response = client.get("/api/v1/cameras")
+        assert response.status_code == 401
+    finally:
+        if saved:
+            client.headers.update({"Authorization": saved})
+
+
+def test_viewer_can_read_but_cannot_modify_inventory():
+    created_user = client.post("/api/v1/auth/users", json={
+        "email": "viewer@example.test",
+        "password": "viewer password long enough",
+        "role": "viewer",
+    })
+    assert created_user.status_code == 201
+    token, _ = main_module.login(
+        app.state.auth_database_path, email="viewer@example.test",
+        password="viewer password long enough", tenant_slug="test-site",
+    )
+    manager_token = client.headers["Authorization"]
+    client.headers.update({"Authorization": f"Bearer {token}"})
+    try:
+        assert client.get("/api/v1/cameras").status_code == 200
+        denied = client.post("/api/v1/cameras", json={
+            "name": "Forbidden", "brand": "Generic", "protocol": "rtsp",
+            "host": "192.0.2.99",
+        })
+        assert denied.status_code == 403
+    finally:
+        client.headers.update({"Authorization": manager_token})
+
+
+def test_tenant_data_isolation_uses_separate_database_files(tmp_path):
+    import time
+    from uuid import uuid4
+
+    with sqlite3.connect(app.state.auth_database_path) as db:
+        second_tenant = str(uuid4())
+        admin_id = db.execute(
+            "SELECT id FROM users WHERE email=?", ("admin@example.test",)
+        ).fetchone()[0]
+        db.execute("INSERT INTO tenants(id,name,slug,created_at) VALUES(?,?,?,?)",
+                   (second_tenant, "Second Site", "second-site", int(time.time())))
+        db.execute("INSERT INTO memberships(user_id,tenant_id,role,created_at) VALUES(?,?,?,?)",
+                   (admin_id, second_tenant, "manager", int(time.time())))
+
+    second_token, _ = main_module.login(
+        app.state.auth_database_path, email="admin@example.test",
+        password="test manager password long", tenant_slug="second-site",
+    )
+    original_token = client.headers["Authorization"]
+    client.headers.update({"Authorization": f"Bearer {second_token}"})
+    created = client.post("/api/v1/cameras", json={
+        "name": "Second tenant camera", "brand": "Generic",
+        "protocol": "rtsp", "host": "198.51.100.8",
+    })
+    assert created.status_code == 201
+    client.headers.update({"Authorization": original_token})
+    first_tenant_cameras = client.get("/api/v1/cameras")
+    assert first_tenant_cameras.status_code == 200
+    assert all(item["name"] != "Second tenant camera"
+               for item in first_tenant_cameras.json())
+    assert tenant_database_path(second_tenant) != tenant_database_path(app.state.test_tenant_id)

@@ -97,10 +97,16 @@ class _DashboardPageState extends State<DashboardPage> {
       try {
         final recorderId = recorder['id'].toString();
         if(recorder['connection_method']=='dahua_p2p') {
-          final state=await http.get(Uri.parse('$apiBase/api/v1/recorders/$recorderId/p2p-status')).timeout(const Duration(seconds:8));
-          if(state.statusCode!=200) throw Exception('P2P status unavailable');
-          if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(
-            language=='fa'?'وضعیت: ثبت شده؛ اتصال واقعی پس از تنظیم API رسمی داهوا':'Registered; live cloud connection awaits official Dahua API setup')));
+          if(Uri.parse(apiBase).scheme!='https') throw Exception('P2P credentials require HTTPS');
+          final state=await http.post(Uri.parse('$apiBase/api/v1/recorders/$recorderId/p2p-connect-test'),
+            headers:{'Content-Type':'application/json'},
+            body:jsonEncode({'username':username.text.trim(),'password':password.text})).timeout(const Duration(seconds:8));
+          if(state.statusCode==501) {
+            if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(
+              language=='fa'?'اتصال ابری هنوز فعال نیست؛ SDK/API رسمی مجاز داهوا تنظیم نشده است':'Cloud connection is not enabled; authorized Dahua SDK/API is not configured')));
+          } else if(state.statusCode!=200) {
+            throw Exception('P2P connection test failed');
+          }
           await syncRecorders();
           username.dispose();password.dispose();
           return;
@@ -169,14 +175,14 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> addRecorder() async {
     final name = TextEditingController(), brand = TextEditingController(text: 'Dahua');
     final model = TextEditingController(), host = TextEditingController(), port = TextEditingController(text: '37777');
-    final serial = TextEditingController(), username = TextEditingController(), password = TextEditingController(), pairing = TextEditingController();
+    final serial = TextEditingController(), username = TextEditingController(), password = TextEditingController();
     String method = 'ip', type = 'dvr';
     String label(String key) {
       const labels = {
-        'fa': {'add':'افزودن دستگاه ضبط','name':'نام دستگاه','brand':'برند','model':'مدل (اختیاری)','type':'نوع دستگاه','method':'روش اتصال','ip':'اتصال با IP','serial':'اتصال با سریال','p2p':'P2P سازگار با DMSS داهوا','host':'IP یا Host','port':'پورت','serialNo':'شماره سریال / Device ID','user':'نام کاربری','pass':'رمز مدیر DVR/NVR','pair':'کد تأیید سازنده','save':'ثبت دستگاه','cancel':'انصراف','failed':'ثبت دستگاه انجام نشد؛ اطلاعات و اتصال سرور را بررسی کنید','saved':'دستگاه ضبط ثبت شد؛ اتصال واقعی پس از افزودن آداپتور سازنده فعال می‌شود'},
-        'en': {'add':'Add recorder','name':'Device name','brand':'Brand','model':'Model (optional)','type':'Device type','method':'Connection method','ip':'Connect by IP','serial':'Connect by serial','p2p':'Dahua DMSS-compatible P2P','host':'IP or Host','port':'Port','serialNo':'Serial number / Device ID','user':'Username','pass':'Recorder admin password','pair':'Vendor pairing code','save':'Register device','cancel':'Cancel','failed':'Could not register device; check fields and server','saved':'Recorder registered; live connection requires the vendor adapter'},
-        'ar': {'add':'إضافة جهاز تسجيل','name':'اسم الجهاز','brand':'العلامة التجارية','model':'الطراز (اختياري)','type':'نوع الجهاز','method':'طريقة الاتصال','ip':'الاتصال عبر IP','serial':'الاتصال عبر الرقم التسلسلي','p2p':'P2P متوافق مع DMSS من Dahua','host':'IP أو المضيف','port':'المنفذ','serialNo':'الرقم التسلسلي / Device ID','user':'اسم المستخدم','pass':'كلمة مرور مدير جهاز DVR/NVR','pair':'رمز اقتران الشركة','save':'تسجيل الجهاز','cancel':'إلغاء','failed':'تعذر تسجيل الجهاز؛ تحقق من البيانات والخادم','saved':'تم تسجيل الجهاز؛ الاتصال الفعلي يتطلب محول الشركة'},
-        'tr': {'add':'Kayıt cihazı ekle','name':'Cihaz adı','brand':'Marka','model':'Model (isteğe bağlı)','type':'Cihaz türü','method':'Bağlantı yöntemi','ip':'IP ile bağlan','serial':'Seri numarasıyla bağlan','p2p':'Dahua DMSS uyumlu P2P','host':'IP veya ana bilgisayar','port':'Bağlantı noktası','serialNo':'Seri numarası / Device ID','user':'Kullanıcı adı','pass':'DVR/NVR yönetici şifresi','pair':'Üretici eşleştirme kodu','save':'Cihazı kaydet','cancel':'İptal','failed':'Cihaz kaydedilemedi; alanları ve sunucuyu kontrol edin','saved':'Kayıt cihazı eklendi; gerçek bağlantı üretici adaptörü gerektirir'}
+        'fa': {'add':'افزودن دستگاه ضبط','name':'نام دستگاه','brand':'برند','model':'مدل (اختیاری)','type':'نوع دستگاه','method':'روش اتصال','ip':'اتصال با IP','p2p':'P2P سازگار با DMSS داهوا','host':'IP یا Host','port':'پورت','serialNo':'شماره سریال / Device ID','user':'نام کاربری','pass':'رمز مدیر DVR/NVR','save':'ثبت دستگاه','cancel':'انصراف','failed':'ثبت دستگاه انجام نشد؛ اطلاعات و اتصال سرور را بررسی کنید','saved':'دستگاه ضبط ثبت شد؛ اتصال واقعی پس از افزودن آداپتور سازنده فعال می‌شود'},
+        'en': {'add':'Add recorder','name':'Device name','brand':'Brand','model':'Model (optional)','type':'Device type','method':'Connection method','ip':'Connect by IP','p2p':'Dahua DMSS-compatible P2P','host':'IP or Host','port':'Port','serialNo':'Serial number / Device ID','user':'Username','pass':'Recorder admin password','save':'Register device','cancel':'Cancel','failed':'Could not register device; check fields and server','saved':'Recorder registered; live connection requires the vendor adapter'},
+        'ar': {'add':'إضافة جهاز تسجيل','name':'اسم الجهاز','brand':'العلامة التجارية','model':'الطراز (اختياري)','type':'نوع الجهاز','method':'طريقة الاتصال','ip':'الاتصال عبر IP','p2p':'P2P متوافق مع DMSS من Dahua','host':'IP أو المضيف','port':'المنفذ','serialNo':'الرقم التسلسلي / Device ID','user':'اسم المستخدم','pass':'كلمة مرور مدير جهاز DVR/NVR','save':'تسجيل الجهاز','cancel':'إلغاء','failed':'تعذر تسجيل الجهاز؛ تحقق من البيانات والخادم','saved':'تم تسجيل الجهاز؛ الاتصال الفعلي يتطلب محول الشركة'},
+        'tr': {'add':'Kayıt cihazı ekle','name':'Cihaz adı','brand':'Marka','model':'Model (isteğe bağlı)','type':'Cihaz türü','method':'Bağlantı yöntemi','ip':'IP ile bağlan','p2p':'Dahua DMSS uyumlu P2P','host':'IP veya ana bilgisayar','port':'Bağlantı noktası','serialNo':'Seri numarası / Device ID','user':'Kullanıcı adı','pass':'DVR/NVR yönetici şifresi','save':'Cihazı kaydet','cancel':'İptal','failed':'Cihaz kaydedilemedi; alanları ve sunucuyu kontrol edin','saved':'Kayıt cihazı eklendi; gerçek bağlantı üretici adaptörü gerektirir'}
       };
       return labels[language]?[key] ?? labels['en']![key]!;
     }
@@ -191,7 +197,7 @@ class _DashboardPageState extends State<DashboardPage> {
             items:const [DropdownMenuItem(value:'dvr',child:Text('DVR')),DropdownMenuItem(value:'nvr',child:Text('NVR')),DropdownMenuItem(value:'xvr',child:Text('XVR'))],
             onChanged:(v){if(v!=null)refresh(()=>type=v);}),
           DropdownButtonFormField<String>(initialValue:method,decoration:InputDecoration(labelText:label('method')),
-            items:[DropdownMenuItem(value:'ip',child:Text(label('ip'))),DropdownMenuItem(value:'serial',child:Text(label('serial'))),DropdownMenuItem(value:'dahua_p2p',child:Text(label('p2p')))],
+            items:[DropdownMenuItem(value:'ip',child:Text(label('ip'))),DropdownMenuItem(value:'dahua_p2p',child:Text(label('p2p')))],
             onChanged:(v){if(v!=null)refresh(()=>method=v);}),
           if(method=='ip') ...[
             TextField(controller:host,decoration:InputDecoration(labelText:label('host'))),
@@ -203,10 +209,6 @@ class _DashboardPageState extends State<DashboardPage> {
             TextField(controller:username,decoration:InputDecoration(labelText:label('user'))),
             TextField(controller:password,obscureText:true,decoration:InputDecoration(labelText:label('pass'))),
             Padding(padding:const EdgeInsets.only(top:8),child:Text(language=='fa'?'فقط شماره سریال، نام کاربری مدیر و رمز مدیر خود DVR/NVR وارد شود. P2P باید روی دستگاه فعال و Online باشد. رمز حساب DMSS قابل استفاده نیست. اتصال ابری Molido هنوز به SDK/API مجاز داهوا نیاز دارد.':'Enter the recorder serial number, recorder admin username and recorder admin password. P2P must be enabled and Online. Do not use the DMSS account password. Molido cloud transport still requires an authorized Dahua SDK/API.',style:const TextStyle(fontSize:11,color:Colors.white60))),
-          ] else ...[
-            TextField(controller:serial,decoration:InputDecoration(labelText:label('serialNo'))),
-            TextField(controller:username,decoration:InputDecoration(labelText:label('user'))),
-            TextField(controller:pairing,obscureText:true,decoration:InputDecoration(labelText:label('pair'))),
           ],
         ])),
         actions:[
@@ -225,13 +227,15 @@ class _DashboardPageState extends State<DashboardPage> {
           'serial_number':method!='ip'?serial.text.trim():null,
           'username':username.text.trim().isEmpty?null:username.text.trim(),
           'password':(method=='ip'||method=='dahua_p2p')?password.text:null,
-          'pairing_code':method=='serial'?pairing.text:null,
         };
         final response = await http.post(Uri.parse('$apiBase/api/v1/recorders'),
           headers:{'Content-Type':'application/json'},body:jsonEncode(payload)).timeout(const Duration(seconds:8));
         if (response.statusCode != 201) throw Exception('HTTP ${response.statusCode}');
         final created = jsonDecode(response.body) as Map<String,dynamic>;
         final createdId = created['id'].toString();
+        if(method=='dahua_p2p' && Uri.parse(apiBase).scheme!='https') {
+          throw Exception('P2P credentials require HTTPS');
+        }
         if(method=='ip') {
           final tested=await http.post(Uri.parse('$apiBase/api/v1/recorders/$createdId/connect-test'),
             headers:{'Content-Type':'application/json'},
@@ -260,7 +264,7 @@ class _DashboardPageState extends State<DashboardPage> {
       }
     }
     name.dispose();brand.dispose();model.dispose();host.dispose();port.dispose();
-    serial.dispose();username.dispose();password.dispose();pairing.dispose();
+    serial.dispose();username.dispose();password.dispose();
   }
 
   Future<void> editServer() async {

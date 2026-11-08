@@ -96,6 +96,15 @@ class _DashboardPageState extends State<DashboardPage> {
     if(ok==true) {
       try {
         final recorderId = recorder['id'].toString();
+        if(recorder['connection_method']=='dahua_p2p') {
+          final state=await http.get(Uri.parse('$apiBase/api/v1/recorders/$recorderId/p2p-status')).timeout(const Duration(seconds:8));
+          if(state.statusCode!=200) throw Exception('P2P status unavailable');
+          if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(
+            language=='fa'?'وضعیت: ثبت شده؛ اتصال واقعی پس از تنظیم API رسمی داهوا':'Registered; live cloud connection awaits official Dahua API setup')));
+          await syncRecorders();
+          username.dispose();password.dispose();
+          return;
+        }
         final response=await http.post(Uri.parse('$apiBase/api/v1/recorders/$recorderId/connect-test'),
           headers:{'Content-Type':'application/json'},
           body:jsonEncode({'username':username.text,'password':password.text})).timeout(const Duration(seconds:20));
@@ -164,10 +173,10 @@ class _DashboardPageState extends State<DashboardPage> {
     String method = 'ip', type = 'dvr';
     String label(String key) {
       const labels = {
-        'fa': {'add':'افزودن دستگاه ضبط','name':'نام دستگاه','brand':'برند','model':'مدل (اختیاری)','type':'نوع دستگاه','method':'روش اتصال','ip':'اتصال با IP','serial':'اتصال با سریال','host':'IP یا Host','port':'پورت','serialNo':'شماره سریال / Device ID','user':'نام کاربری','pass':'رمز عبور','pair':'کد تأیید سازنده','save':'ثبت دستگاه','cancel':'انصراف','failed':'ثبت دستگاه انجام نشد؛ اطلاعات و اتصال سرور را بررسی کنید','saved':'دستگاه ضبط ثبت شد؛ اتصال واقعی پس از افزودن آداپتور سازنده فعال می‌شود'},
-        'en': {'add':'Add recorder','name':'Device name','brand':'Brand','model':'Model (optional)','type':'Device type','method':'Connection method','ip':'Connect by IP','serial':'Connect by serial','host':'IP or Host','port':'Port','serialNo':'Serial number / Device ID','user':'Username','pass':'Password','pair':'Vendor pairing code','save':'Register device','cancel':'Cancel','failed':'Could not register device; check fields and server','saved':'Recorder registered; live connection requires the vendor adapter'},
-        'ar': {'add':'إضافة جهاز تسجيل','name':'اسم الجهاز','brand':'العلامة التجارية','model':'الطراز (اختياري)','type':'نوع الجهاز','method':'طريقة الاتصال','ip':'الاتصال عبر IP','serial':'الاتصال عبر الرقم التسلسلي','host':'IP أو المضيف','port':'المنفذ','serialNo':'الرقم التسلسلي / Device ID','user':'اسم المستخدم','pass':'كلمة المرور','pair':'رمز اقتران الشركة','save':'تسجيل الجهاز','cancel':'إلغاء','failed':'تعذر تسجيل الجهاز؛ تحقق من البيانات والخادم','saved':'تم تسجيل الجهاز؛ الاتصال الفعلي يتطلب محول الشركة'},
-        'tr': {'add':'Kayıt cihazı ekle','name':'Cihaz adı','brand':'Marka','model':'Model (isteğe bağlı)','type':'Cihaz türü','method':'Bağlantı yöntemi','ip':'IP ile bağlan','serial':'Seri numarasıyla bağlan','host':'IP veya ana bilgisayar','port':'Bağlantı noktası','serialNo':'Seri numarası / Device ID','user':'Kullanıcı adı','pass':'Şifre','pair':'Üretici eşleştirme kodu','save':'Cihazı kaydet','cancel':'İptal','failed':'Cihaz kaydedilemedi; alanları ve sunucuyu kontrol edin','saved':'Kayıt cihazı eklendi; gerçek bağlantı üretici adaptörü gerektirir'}
+        'fa': {'add':'افزودن دستگاه ضبط','name':'نام دستگاه','brand':'برند','model':'مدل (اختیاری)','type':'نوع دستگاه','method':'روش اتصال','ip':'اتصال با IP','serial':'اتصال با سریال','p2p':'کلاد رسمی Dahua P2P','host':'IP یا Host','port':'پورت','serialNo':'شماره سریال / Device ID','user':'نام کاربری','pass':'رمز عبور','pair':'کد تأیید سازنده','save':'ثبت دستگاه','cancel':'انصراف','failed':'ثبت دستگاه انجام نشد؛ اطلاعات و اتصال سرور را بررسی کنید','saved':'دستگاه ضبط ثبت شد؛ اتصال واقعی پس از افزودن آداپتور سازنده فعال می‌شود'},
+        'en': {'add':'Add recorder','name':'Device name','brand':'Brand','model':'Model (optional)','type':'Device type','method':'Connection method','ip':'Connect by IP','serial':'Connect by serial','p2p':'Dahua official P2P Cloud','host':'IP or Host','port':'Port','serialNo':'Serial number / Device ID','user':'Username','pass':'Password','pair':'Vendor pairing code','save':'Register device','cancel':'Cancel','failed':'Could not register device; check fields and server','saved':'Recorder registered; live connection requires the vendor adapter'},
+        'ar': {'add':'إضافة جهاز تسجيل','name':'اسم الجهاز','brand':'العلامة التجارية','model':'الطراز (اختياري)','type':'نوع الجهاز','method':'طريقة الاتصال','ip':'الاتصال عبر IP','serial':'الاتصال عبر الرقم التسلسلي','p2p':'سحابة Dahua P2P الرسمية','host':'IP أو المضيف','port':'المنفذ','serialNo':'الرقم التسلسلي / Device ID','user':'اسم المستخدم','pass':'كلمة المرور','pair':'رمز اقتران الشركة','save':'تسجيل الجهاز','cancel':'إلغاء','failed':'تعذر تسجيل الجهاز؛ تحقق من البيانات والخادم','saved':'تم تسجيل الجهاز؛ الاتصال الفعلي يتطلب محول الشركة'},
+        'tr': {'add':'Kayıt cihazı ekle','name':'Cihaz adı','brand':'Marka','model':'Model (isteğe bağlı)','type':'Cihaz türü','method':'Bağlantı yöntemi','ip':'IP ile bağlan','serial':'Seri numarasıyla bağlan','p2p':'Resmî Dahua P2P Bulutu','host':'IP veya ana bilgisayar','port':'Bağlantı noktası','serialNo':'Seri numarası / Device ID','user':'Kullanıcı adı','pass':'Şifre','pair':'Üretici eşleştirme kodu','save':'Cihazı kaydet','cancel':'İptal','failed':'Cihaz kaydedilemedi; alanları ve sunucuyu kontrol edin','saved':'Kayıt cihazı eklendi; gerçek bağlantı üretici adaptörü gerektirir'}
       };
       return labels[language]?[key] ?? labels['en']![key]!;
     }
@@ -182,7 +191,7 @@ class _DashboardPageState extends State<DashboardPage> {
             items:const [DropdownMenuItem(value:'dvr',child:Text('DVR')),DropdownMenuItem(value:'nvr',child:Text('NVR')),DropdownMenuItem(value:'xvr',child:Text('XVR'))],
             onChanged:(v){if(v!=null)refresh(()=>type=v);}),
           DropdownButtonFormField<String>(initialValue:method,decoration:InputDecoration(labelText:label('method')),
-            items:[DropdownMenuItem(value:'ip',child:Text(label('ip'))),DropdownMenuItem(value:'serial',child:Text(label('serial')))],
+            items:[DropdownMenuItem(value:'ip',child:Text(label('ip'))),DropdownMenuItem(value:'serial',child:Text(label('serial'))),DropdownMenuItem(value:'dahua_p2p',child:Text(label('p2p')))],
             onChanged:(v){if(v!=null)refresh(()=>method=v);}),
           if(method=='ip') ...[
             TextField(controller:host,decoration:InputDecoration(labelText:label('host'))),
@@ -208,10 +217,10 @@ class _DashboardPageState extends State<DashboardPage> {
           'recorder_type':type,'connection_method':method,
           'host':method=='ip'?host.text.trim():null,
           'port':method=='ip'?int.tryParse(port.text.trim()):null,
-          'serial_number':method=='serial'?serial.text.trim():null,
+          'serial_number':method!='ip'?serial.text.trim():null,
           'username':username.text.trim().isEmpty?null:username.text.trim(),
           'password':method=='ip'?password.text:null,
-          'pairing_code':method=='serial'?pairing.text:null,
+          'pairing_code':method!='ip'?pairing.text:null,
         };
         final response = await http.post(Uri.parse('$apiBase/api/v1/recorders'),
           headers:{'Content-Type':'application/json'},body:jsonEncode(payload)).timeout(const Duration(seconds:8));
@@ -231,6 +240,11 @@ class _DashboardPageState extends State<DashboardPage> {
             if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(
               language=='fa'?'دستگاه ثبت شد اما اتصال برقرار نشد':'Recorder saved, but connection test failed')));
           }
+        } else if(method=='dahua_p2p') {
+          final state=await http.get(Uri.parse('$apiBase/api/v1/recorders/$createdId/p2p-status')).timeout(const Duration(seconds:8));
+          if(state.statusCode!=200) throw Exception('P2P status unavailable');
+          if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(
+            language=='fa'?'سریال ثبت شد؛ اتصال کلاد رسمی پس از تأیید حساب توسعه‌دهنده و تنظیم API فعال می‌شود':'Serial saved; official cloud access awaits verified developer account and API setup')));
         } else {
           if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(
             language=='fa'?'سریال ثبت شد؛ آداپتور P2P سازنده هنوز نیازمند SDK است':'Serial saved; manufacturer P2P SDK adapter is still required')));

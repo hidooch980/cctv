@@ -182,3 +182,42 @@ def test_serial_connection_test_is_explicitly_not_supported_without_vendor_sdk()
         json={"username": "operator", "password": "secret"},
     )
     assert response.status_code == 501
+
+
+def test_dahua_p2p_registration_and_readiness_are_explicit():
+    created = client.post("/api/v1/recorders", json={
+        "name": "Remote Dahua NVR", "brand": "Dahua", "recorder_type": "nvr",
+        "connection_method": "dahua_p2p", "serial_number": "DH-SERIAL-2026",
+        "username": "operator",
+    })
+    assert created.status_code == 201
+    body = created.json()
+    assert body["connection_method"] == "dahua_p2p"
+    status_response = client.get(f"/api/v1/recorders/{body['id']}/p2p-status")
+    assert status_response.status_code == 200
+    state = status_response.json()
+    assert state["connection_mode"] == "official_p2p_cloud"
+    assert state["integration_state"] == "credentials_required"
+    assert state["online"] is False
+    assert state["sdk_connected"] is False
+    assert state["cloud_video"] is False
+
+
+def test_dahua_p2p_rejects_other_brands():
+    response = client.post("/api/v1/recorders", json={
+        "name": "Remote NVR", "brand": "Hikvision", "recorder_type": "nvr",
+        "connection_method": "dahua_p2p", "serial_number": "SN123456",
+        "username": "operator",
+    })
+    assert response.status_code == 422
+
+
+def test_dahua_p2p_connect_test_is_not_faked():
+    created = client.post("/api/v1/recorders", json={
+        "name": "Remote Dahua NVR", "brand": "Dahua", "recorder_type": "nvr",
+        "connection_method": "dahua_p2p", "serial_number": "DH-SERIAL-2026",
+        "username": "operator",
+    })
+    response = client.post(f"/api/v1/recorders/{created.json()['id']}/p2p-connect-test")
+    assert response.status_code == 501
+    assert "DoLynk Developer" in response.json()["detail"]

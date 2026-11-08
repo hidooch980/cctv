@@ -79,6 +79,7 @@ class RecorderType(str, Enum):
 class RecorderConnectionMethod(str, Enum):
     ip = "ip"
     serial = "serial"
+    dahua_p2p = "dahua_p2p"
 
 
 class RecorderCreate(BaseModel):
@@ -110,9 +111,11 @@ class RecorderCreate(BaseModel):
         if self.connection_method == RecorderConnectionMethod.ip:
             if not self.host or not self.username or not self.password:
                 raise ValueError("IP connection requires host, username and password")
-        if self.connection_method == RecorderConnectionMethod.serial:
+        if self.connection_method in (RecorderConnectionMethod.serial, RecorderConnectionMethod.dahua_p2p):
             if not self.serial_number or not (self.username or self.pairing_code):
-                raise ValueError("Serial connection requires serial_number and vendor authorization proof")
+                raise ValueError("Serial/P2P connection requires serial_number and vendor authorization proof")
+        if self.connection_method == RecorderConnectionMethod.dahua_p2p and self.brand.strip().lower() != "dahua":
+            raise ValueError("dahua_p2p connection is only valid for Dahua recorders")
         return self
 
 

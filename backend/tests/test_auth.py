@@ -98,3 +98,41 @@ def test_login_failures_are_persisted_and_locked(auth_db):
     with pytest.raises(AuthError, match="login_rate_limited"):
         login(auth_db, email="admin@example.test",
               password="a sufficiently long password", tenant_slug="example", now=1001)
+
+
+def test_mediamtx_token_is_path_transport_and_session_bound(auth_db):
+    from app.auth import issue_media_token, verify_media_token
+
+    tenant_id = bootstrap(auth_db)
+    token, _ = login(auth_db, email="admin@example.test",
+                     password="a sufficiently long password", tenant_slug="example")
+    principal = resolve_principal(auth_db, token, tenant_id)
+    media_token, expiry = issue_media_token(
+        auth_db, principal, media_path="tenant/site-a/camera-1/sub", ttl_seconds=300, now=2000,
+    )
+    assert expiry == 2300
+    assert verify_media_token(
+        auth_db, token=media_token, media_path="tenant/site-a/camera-1/sub",
+        action="read", protocol="webrtc", now=2001,
+    ) == 2300
+    with pytest.raises(AuthError, match="invalid_media_token"):
+        verify_media_token(
+            auth_db, token=media_token, media_path="tenant/other/camera-1/sub",
+            action="read", protocol="webrtc", now=2001,
+        )
+    with pytest.raises(AuthError, match="media_action_forbidden"):
+        verify_media_token(
+            auth_db, token=media_token, media_path="tenant/site-a/camera-1/sub",
+            action="publish", protocol="webrtc", now=2001,
+        )
+    with pytest.raises(AuthError, match="media_action_forbidden"):
+        verify_media_token(
+            auth_db, token=media_token, media_path="tenant/site-a/camera-1/sub",
+            action="read", protocol="rtsp", now=2001,
+        )
+    logout(auth_db, token, now=2002)
+    with pytest.raises(AuthError, match="invalid_media_token"):
+        verify_media_token(
+            auth_db, token=media_token, media_path="tenant/site-a/camera-1/sub",
+            action="read", protocol="hls", now=2003,
+        )

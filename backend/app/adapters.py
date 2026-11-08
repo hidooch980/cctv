@@ -217,6 +217,20 @@ async def _dahua_probe(
     )
 
 
+def _merge_onvif_streams(vendor_result: AdapterResult, onvif_result: AdapterResult) -> AdapterResult:
+    for index, channel in enumerate(vendor_result.channels):
+        if index < len(onvif_result.channels):
+            onvif_channel = onvif_result.channels[index]
+            channel["profile_token"] = onvif_channel.get("profile_token")
+            channel["stream_uri"] = onvif_channel.get("stream_uri")
+    vendor_result.capabilities.extend(
+        capability for capability in onvif_result.capabilities
+        if capability not in vendor_result.capabilities
+    )
+    vendor_result.warnings.extend(onvif_result.warnings)
+    return vendor_result
+
+
 class RecorderAdapterRegistry:
     """Brand-aware adapter selection with ONVIF fallback; credentials stay in memory only."""
 
@@ -232,7 +246,12 @@ class RecorderAdapterRegistry:
                         try:
                             vendor_result = await _hikvision_probe(client, base, username, password)
                             if vendor_result.channels:
-                                return vendor_result
+                                try:
+                                    onvif_result = await _onvif_discover(client, base, username, password)
+                                    return _merge_onvif_streams(vendor_result, onvif_result)
+                                except (httpx.HTTPError, ET.ParseError, ValueError):
+                                    vendor_result.warnings.append("ONVIF media profiles unavailable; vendor channel inventory is still available")
+                                    return vendor_result
                             warnings.extend(vendor_result.warnings)
                             warnings.append("Trying ONVIF profile discovery for Hikvision recorder")
                         except (httpx.HTTPError, ET.ParseError, ValueError):
@@ -241,7 +260,12 @@ class RecorderAdapterRegistry:
                         try:
                             vendor_result = await _dahua_probe(client, base, username, password)
                             if vendor_result.channels:
-                                return vendor_result
+                                try:
+                                    onvif_result = await _onvif_discover(client, base, username, password)
+                                    return _merge_onvif_streams(vendor_result, onvif_result)
+                                except (httpx.HTTPError, ET.ParseError, ValueError):
+                                    vendor_result.warnings.append("ONVIF media profiles unavailable; vendor channel inventory is still available")
+                                    return vendor_result
                             warnings.extend(vendor_result.warnings)
                             warnings.append("Trying ONVIF profile discovery for Dahua recorder")
                         except (httpx.HTTPError, ET.ParseError, ValueError):

@@ -3,7 +3,7 @@
 Molido CCTV AI treats DVR, NVR and hybrid XVR appliances as first-class managed devices, alongside standalone IP cameras.
 
 ## Connection methods
-The mobile user and recorder may be on completely different networks. For supported Dahua devices, the primary remote mode is the **official Dahua P2P/cloud service** using the recorder serial/QR and device authentication. Local IP remains available, while Molido Gateway and secure Public IP/VPN are optional fallbacks. Availability depends on model, firmware, region and vendor authorization. See [remote connectivity architecture](remote-connectivity-architecture.md).
+The mobile user and recorder may be on completely different networks. For supported Dahua devices, the primary remote workflow is **Dahua DMSS-compatible P2P** using the recorder serial/QR and the recorder's own authentication. DMSS is the official Dahua mobile client; this workflow is the product target, not proof that its private cloud SDK/API is available to third parties. Local IP remains available, while Molido Gateway and secure Public IP/VPN are optional fallbacks. Availability depends on model, firmware, region and vendor authorization. See [remote connectivity architecture](remote-connectivity-architecture.md).
 
 ### A. Direct IP connection
 - Connect directly over the reachable LAN/WAN IP address or hostname and configured service port.
@@ -11,11 +11,15 @@ The mobile user and recorder may be on completely different networks. For suppor
 - The recorder must be reachable from the Molido server/client and the account must have the required permissions.
 - Port defaults are model/protocol-specific and must remain editable.
 
-### B. Dahua official P2P / cloud connection (primary remote mode)
+### B. Dahua DMSS-compatible P2P / cloud connection (primary remote workflow)
 - Provide an optional serial-number entry path for manufacturers that support device binding or remote/P2P access by serial number.
-- Inputs may include serial number/device ID plus the vendor-required verification code, device password, account authorization or other pairing proof.
+- Match the DMSS add-device flow: scan QR or enter serial number, select the supported device type, then provide the recorder's device username/password and any model/app-version-specific security or pairing proof.
+- The recorder's P2P feature must be enabled and report Online while the recorder itself has internet access. The phone can use a different internet connection/mobile data.
+- The DMSS account password and recorder password are distinct; request only the recorder credentials needed by the authorized integration.
 - Serial number alone is not assumed to authenticate or establish a connection. Do not bypass vendor authentication.
-- Where supported, use the manufacturer's documented SDK/API/P2P service. Where unsupported, clearly explain that this model requires direct IP connection.
+- Use only an authorized, documented Dahua P2P SDK/API/partner interface; never extract DMSS tokens or reverse-engineer private cloud traffic.
+- Do not assume DoLynk Developer APIs are identical to consumer DMSS P2P. Treat DoLynk as a separate enterprise integration path requiring its own eligibility and documentation.
+- Where no authorized third-party P2P interface is available, report the limitation and offer secure VPN/direct IP or the optional Molido gateway.
 - QR scanning may be offered as a convenience to populate serial/device ID and pairing fields, but must not be mandatory.
 - Do not require the user to create a vendor cloud account unless the specific manufacturer's documented connection method requires it.
 
@@ -32,7 +36,7 @@ The mobile user and recorder may be on completely different networks. For suppor
 - Prefer VPN or restrictive firewall allowlists; do not expose recorder administration ports openly to the internet.
 - Require TLS where supported and strong unique credentials. Validate destination and port to prevent SSRF and port scanning.
 
-The UI must let the operator choose **Dahua P2P/Cloud** (primary remote mode), **Local IP**, **Molido Gateway** or **Public IP/VPN** and show only fields required by the selected supported adapter.
+The UI must let the operator choose **Dahua DMSS-compatible P2P/Cloud** (primary remote workflow), **Local IP**, **Molido Gateway** or **Public IP/VPN** and show only fields required by the selected supported adapter.
 
 ## Device inventory
 - Device type: DVR, NVR or XVR.
@@ -61,7 +65,7 @@ The UI must let the operator choose **Dahua P2P/Cloud** (primary remote mode), *
 - **Hikvision:** ISAPI device information and supported input/stream channel endpoints; falls back to ONVIF when the ISAPI path is unavailable.
 - **Dahua:** CGI system information and channel-title enumeration; ONVIF remains the fallback for media profiles and RTSP stream URIs.
 - **Uniview, Tiandy and other ONVIF-capable brands:** generic ONVIF adapter path. A dedicated vendor API adapter is not yet certified for these brands.
-- **Dahua P2P/Cloud:** serial/device-ID inventory is accepted, but live cloud authentication is not enabled until the authorized Dahua SDK/API, account mode, authorization material and terms are available.
+- **Dahua DMSS-compatible P2P/Cloud:** serial/QR inventory is accepted, but live cloud authentication and video are not enabled until an authorized third-party P2P interface/SDK, account mode, authorization material and terms are available. DoLynk Developer is a separate possible enterprise route.
 - **Molido Gateway / remote relay:** architecture is documented; gateway enrollment, outbound tunnel and media relay are not implemented yet.
 
 The connection-test endpoint is \`POST /api/v1/recorders/{id}/connect-test\`; it accepts credentials for that single request, performs an authenticated probe, and does not persist the submitted username/password. Discovered channels are listed at \`GET /api/v1/recorders/{id}/channels\`.

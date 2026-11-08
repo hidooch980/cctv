@@ -4,7 +4,7 @@ import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
@@ -41,6 +41,19 @@ def _text(root: ET.Element, name: str) -> str | None:
         if _local(node.tag) == name and node.text:
             return node.text.strip()
     return None
+
+
+def _safe_stream_uri(value: str | None) -> str | None:
+    if not value:
+        return None
+    parsed = urlsplit(value)
+    if parsed.scheme.lower() != "rtsp" or not parsed.hostname:
+        return None
+    # Never persist usernames/passwords returned inside an ONVIF RTSP URI.
+    host = parsed.hostname
+    if parsed.port:
+        host += f":{parsed.port}"
+    return urlunsplit(("rtsp", host, parsed.path, parsed.query, ""))
 
 
 def _base_urls(host: str, port: int | None) -> list[str]:
@@ -117,7 +130,7 @@ async def _onvif_discover(
                 '<trt:Transport><trt:Protocol>RTSP</trt:Protocol></trt:Transport>'
                 f'</trt:StreamSetup><trt:ProfileToken>{token}</trt:ProfileToken></trt:GetStreamUri>',
             )
-            stream_uri = _text(uri_xml, "Uri")
+            stream_uri = _safe_stream_uri(_text(uri_xml, "Uri"))
         except (httpx.HTTPError, ET.ParseError):
             pass
         channels.append({

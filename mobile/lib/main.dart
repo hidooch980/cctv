@@ -107,6 +107,75 @@ class _DashboardPageState extends State<DashboardPage> {
     } finally { name.dispose(); host.dispose(); brand.dispose(); }
   }
 
+
+  Future<void> addRecorder() async {
+    final name = TextEditingController(), brand = TextEditingController(text: 'Dahua');
+    final model = TextEditingController(), host = TextEditingController(), port = TextEditingController(text: '37777');
+    final serial = TextEditingController(), username = TextEditingController(), password = TextEditingController(), pairing = TextEditingController();
+    String method = 'ip', type = 'dvr';
+    String label(String key) {
+      const labels = {
+        'fa': {'add':'افزودن دستگاه ضبط','name':'نام دستگاه','brand':'برند','model':'مدل (اختیاری)','type':'نوع دستگاه','method':'روش اتصال','ip':'اتصال با IP','serial':'اتصال با سریال','host':'IP یا Host','port':'پورت','serialNo':'شماره سریال / Device ID','user':'نام کاربری','pass':'رمز عبور','pair':'کد تأیید سازنده','save':'ثبت دستگاه','cancel':'انصراف','failed':'ثبت دستگاه انجام نشد؛ اطلاعات و اتصال سرور را بررسی کنید','saved':'دستگاه ضبط ثبت شد؛ اتصال واقعی پس از افزودن آداپتور سازنده فعال می‌شود'},
+        'en': {'add':'Add recorder','name':'Device name','brand':'Brand','model':'Model (optional)','type':'Device type','method':'Connection method','ip':'Connect by IP','serial':'Connect by serial','host':'IP or Host','port':'Port','serialNo':'Serial number / Device ID','user':'Username','pass':'Password','pair':'Vendor pairing code','save':'Register device','cancel':'Cancel','failed':'Could not register device; check fields and server','saved':'Recorder registered; live connection requires the vendor adapter'},
+        'ar': {'add':'إضافة جهاز تسجيل','name':'اسم الجهاز','brand':'العلامة التجارية','model':'الطراز (اختياري)','type':'نوع الجهاز','method':'طريقة الاتصال','ip':'الاتصال عبر IP','serial':'الاتصال عبر الرقم التسلسلي','host':'IP أو المضيف','port':'المنفذ','serialNo':'الرقم التسلسلي / Device ID','user':'اسم المستخدم','pass':'كلمة المرور','pair':'رمز اقتران الشركة','save':'تسجيل الجهاز','cancel':'إلغاء','failed':'تعذر تسجيل الجهاز؛ تحقق من البيانات والخادم','saved':'تم تسجيل الجهاز؛ الاتصال الفعلي يتطلب محول الشركة'},
+        'tr': {'add':'Kayıt cihazı ekle','name':'Cihaz adı','brand':'Marka','model':'Model (isteğe bağlı)','type':'Cihaz türü','method':'Bağlantı yöntemi','ip':'IP ile bağlan','serial':'Seri numarasıyla bağlan','host':'IP veya ana bilgisayar','port':'Bağlantı noktası','serialNo':'Seri numarası / Device ID','user':'Kullanıcı adı','pass':'Şifre','pair':'Üretici eşleştirme kodu','save':'Cihazı kaydet','cancel':'İptal','failed':'Cihaz kaydedilemedi; alanları ve sunucuyu kontrol edin','saved':'Kayıt cihazı eklendi; gerçek bağlantı üretici adaptörü gerektirir'}
+      };
+      return labels[language]?[key] ?? labels['en']![key]!;
+    }
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => StatefulBuilder(
+      builder: (ctx, refresh) => AlertDialog(
+        backgroundColor: panel, title: Text(label('add')),
+        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller:name,decoration:InputDecoration(labelText:label('name'))),
+          TextField(controller:brand,decoration:InputDecoration(labelText:label('brand'))),
+          TextField(controller:model,decoration:InputDecoration(labelText:label('model'))),
+          DropdownButtonFormField<String>(value:type,decoration:InputDecoration(labelText:label('type')),
+            items:const [DropdownMenuItem(value:'dvr',child:Text('DVR')),DropdownMenuItem(value:'nvr',child:Text('NVR')),DropdownMenuItem(value:'xvr',child:Text('XVR'))],
+            onChanged:(v){if(v!=null)refresh(()=>type=v);}),
+          DropdownButtonFormField<String>(value:method,decoration:InputDecoration(labelText:label('method')),
+            items:[DropdownMenuItem(value:'ip',child:Text(label('ip'))),DropdownMenuItem(value:'serial',child:Text(label('serial')))],
+            onChanged:(v){if(v!=null)refresh(()=>method=v);}),
+          if(method=='ip') ...[
+            TextField(controller:host,decoration:InputDecoration(labelText:label('host'))),
+            TextField(controller:port,keyboardType:TextInputType.number,decoration:InputDecoration(labelText:label('port'))),
+            TextField(controller:username,decoration:InputDecoration(labelText:label('user'))),
+            TextField(controller:password,obscureText:true,decoration:InputDecoration(labelText:label('pass'))),
+          ] else ...[
+            TextField(controller:serial,decoration:InputDecoration(labelText:label('serialNo'))),
+            TextField(controller:username,decoration:InputDecoration(labelText:label('user'))),
+            TextField(controller:pairing,obscureText:true,decoration:InputDecoration(labelText:label('pair'))),
+          ],
+        ])),
+        actions:[
+          TextButton(onPressed:()=>Navigator.pop(ctx,false),child:Text(label('cancel'))),
+          FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:Text(label('save'))),
+        ],
+      ),
+    ));
+    if (ok == true) {
+      try {
+        final payload = <String,dynamic>{
+          'name':name.text.trim(),'brand':brand.text.trim(),'model':model.text.trim().isEmpty?null:model.text.trim(),
+          'recorder_type':type,'connection_method':method,
+          'host':method=='ip'?host.text.trim():null,
+          'port':method=='ip'?int.tryParse(port.text.trim()):null,
+          'serial_number':method=='serial'?serial.text.trim():null,
+          'username':username.text.trim().isEmpty?null:username.text.trim(),
+          'password':method=='ip'?password.text:null,
+          'pairing_code':method=='serial'?pairing.text:null,
+        };
+        final response = await http.post(Uri.parse('$apiBase/api/v1/recorders'),
+          headers:{'Content-Type':'application/json'},body:jsonEncode(payload)).timeout(const Duration(seconds:8));
+        if (response.statusCode != 201) throw Exception('HTTP \${response.statusCode}');
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(label('saved'))));
+      } catch (_) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(label('failed'))));
+      }
+    }
+    name.dispose();brand.dispose();model.dispose();host.dispose();port.dispose();
+    serial.dispose();username.dispose();password.dispose();pairing.dispose();
+  }
+
   Future<void> editServer() async {
     final field = TextEditingController(text: apiBase);
     final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
@@ -189,7 +258,8 @@ class _DashboardPageState extends State<DashboardPage> {
     Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[Text(t('manage'),style:TextStyle(fontSize:19,fontWeight:FontWeight.bold)),Text('${cameras.length} ${t('device')}',style:const TextStyle(color:Colors.white54))]),
     const SizedBox(height:12),
     ...cameras.map((c)=>Card(child:ListTile(leading:Container(width:42,height:42,decoration:BoxDecoration(color:brandRed.withValues(alpha:.13),borderRadius:BorderRadius.circular(12)),child:const Icon(Icons.videocam,color:brandRed)),title:Text(c.name),subtitle:Text('${c.brand}  •  ${c.host}\n${c.location}',style:const TextStyle(fontSize:11)),isThreeLine:true,trailing:const Icon(Icons.chevron_left)))),
-    const SizedBox(height:12),OutlinedButton.icon(onPressed:connecting?null:syncCameras,icon:const Icon(Icons.sync),label:Text(connecting?t('syncing'):t('syncServer'))),
+    const SizedBox(height:12),FilledButton.icon(style:FilledButton.styleFrom(backgroundColor:brandRed),onPressed:addRecorder,icon:const Icon(Icons.dvr),label:Text(language=='fa'?'افزودن DVR / NVR':language=='ar'?'إضافة DVR / NVR':language=='tr'?'DVR / NVR ekle':'Add DVR / NVR')),
+    const SizedBox(height:8),OutlinedButton.icon(onPressed:connecting?null:syncCameras,icon:const Icon(Icons.sync),label:Text(connecting?t('syncing'):t('syncServer'))),
   ]);
 
   Widget _events()=>ListView(padding:const EdgeInsets.all(16),children:[

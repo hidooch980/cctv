@@ -4,6 +4,7 @@ import 'package:molido_cctv/main.dart';
 Widget testDashboard() => MolidoCctvApp(
   homeOverride: DashboardPage(
     token: 'test-token',
+    role: 'manager',
     initialApiBase: 'http://10.0.2.2:8000',
     onLogout: () async {},
   ),

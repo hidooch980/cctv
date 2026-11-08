@@ -433,7 +433,7 @@ def test_mediamtx_http_auth_callback_accepts_only_valid_scoped_token():
     principal = resolve_principal(app.state.auth_database_path, token)
     media_path = f"tenant/{principal.tenant_id}/camera-1/sub"
     media_token, _ = issue_media_token(
-        app.state.auth_database_path, principal, media_path=media_path, ttl_seconds=300,
+        app.state.auth_database_path, principal, media_path=media_path, protocol="webrtc", ttl_seconds=300,
     )
     private_client = TestClient(app, client=("127.0.0.1", 12345))
     payload = {

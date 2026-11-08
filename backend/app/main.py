@@ -155,6 +155,7 @@ def database_path() -> Path:
 def db_connection() -> Iterator[sqlite3.Connection]:
     connection = sqlite3.connect(database_path(), timeout=10)
     connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys=ON")
     try:
         yield connection
         connection.commit()

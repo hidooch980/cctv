@@ -25,6 +25,10 @@ def test_password_hash_is_salted_and_verifiable():
 def test_password_hash_rejects_weak_input_and_malformed_hash():
     with pytest.raises(ValueError):
         hash_password("short")
+    with pytest.raises(ValueError):
+        hash_password("long enough password", iterations=99_999)
+    with pytest.raises(ValueError):
+        hash_password("long enough password", iterations=2_000_001)
     assert not verify_password("anything", "not-a-valid-hash")
 
 

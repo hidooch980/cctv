@@ -9,7 +9,7 @@ from typing import Iterator
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI, HTTPException, status
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -67,6 +67,67 @@ class CameraRead(BaseModel):
     status: CameraStatus
 
 
+
+class RecorderType(str, Enum):
+    dvr = "dvr"
+    nvr = "nvr"
+    xvr = "xvr"
+
+
+class RecorderConnectionMethod(str, Enum):
+    ip = "ip"
+    serial = "serial"
+
+
+class RecorderCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    brand: str = Field(min_length=1, max_length=80)
+    model: str | None = Field(default=None, max_length=120)
+    recorder_type: RecorderType
+    connection_method: RecorderConnectionMethod
+    host: str | None = Field(default=None, max_length=255)
+    port: int | None = Field(default=None, ge=1, le=65535)
+    serial_number: str | None = Field(default=None, min_length=3, max_length=128)
+    location: str | None = Field(default=None, max_length=255)
+    username: str | None = Field(default=None, max_length=128, exclude=True)
+    password: str | None = Field(default=None, max_length=512, exclude=True)
+    pairing_code: str | None = Field(default=None, max_length=256, exclude=True)
+
+    @field_validator("host")
+    @classmethod
+    def validate_recorder_host(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        value = value.strip()
+        if not value or "://" in value or "@" in value or "/" in value:
+            raise ValueError("host must be a hostname or IP address, not a URL")
+        return value
+
+    @model_validator(mode="after")
+    def validate_connection_fields(self):
+        if self.connection_method == RecorderConnectionMethod.ip:
+            if not self.host or not self.username or not self.password:
+                raise ValueError("IP connection requires host, username and password")
+        if self.connection_method == RecorderConnectionMethod.serial:
+            if not self.serial_number or not (self.username or self.pairing_code):
+                raise ValueError("Serial connection requires serial_number and vendor authorization proof")
+        return self
+
+
+class RecorderRead(BaseModel):
+    id: UUID
+    name: str
+    brand: str
+    model: str | None
+    recorder_type: RecorderType
+    connection_method: RecorderConnectionMethod
+    host: str | None
+    port: int | None
+    serial_number: str | None
+    location: str | None
+    status: str
+
+
 def database_path() -> Path:
     configured = Path(app.state.database_path)
     configured.parent.mkdir(parents=True, exist_ok=True)
@@ -103,6 +164,16 @@ def init_database() -> None:
             """
         )
         db.execute("CREATE INDEX IF NOT EXISTS idx_cameras_host ON cameras(host)")
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS recorders (
+                id TEXT PRIMARY KEY, name TEXT NOT NULL, brand TEXT NOT NULL,
+                model TEXT, recorder_type TEXT NOT NULL, connection_method TEXT NOT NULL,
+                host TEXT, port INTEGER, serial_number TEXT, location TEXT,
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        db.execute("CREATE INDEX IF NOT EXISTS idx_recorders_host ON recorders(host)")
 
 
 def row_to_camera(row: sqlite3.Row) -> CameraRead:
@@ -171,3 +242,65 @@ def delete_camera(camera_id: UUID) -> None:
         cursor = db.execute("DELETE FROM cameras WHERE id=?", (str(camera_id),))
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Camera not found")
+
+
+
+def row_to_recorder(row: sqlite3.Row) -> RecorderRead:
+    return RecorderRead(
+        id=UUID(row["id"]), name=row["name"], brand=row["brand"],
+        model=row["model"], recorder_type=row["recorder_type"],
+        connection_method=row["connection_method"], host=row["host"],
+        port=row["port"], serial_number=row["serial_number"],
+        location=row["location"], status=row["status"],
+    )
+
+
+@app.get("/api/v1/recorders", response_model=list[RecorderRead])
+def list_recorders() -> list[RecorderRead]:
+    with db_connection() as db:
+        rows = db.execute(
+            "SELECT id,name,brand,model,recorder_type,connection_method,host,port,serial_number,location,status FROM recorders ORDER BY created_at,id"
+        ).fetchall()
+    return [row_to_recorder(row) for row in rows]
+
+
+@app.post("/api/v1/recorders", response_model=RecorderRead, status_code=status.HTTP_201_CREATED)
+def create_recorder(payload: RecorderCreate) -> RecorderRead:
+    with db_connection() as db:
+        count = db.execute("SELECT COUNT(*) FROM recorders").fetchone()[0]
+        if count >= 100:
+            raise HTTPException(status_code=409, detail="Initial recorder capacity (100) reached")
+        recorder_id = uuid4()
+        db.execute(
+            """INSERT INTO recorders
+               (id,name,brand,model,recorder_type,connection_method,host,port,serial_number,location,status)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (str(recorder_id), payload.name, payload.brand, payload.model,
+             payload.recorder_type.value, payload.connection_method.value,
+             payload.host, payload.port, payload.serial_number, payload.location, "pending"),
+        )
+        row = db.execute(
+            "SELECT id,name,brand,model,recorder_type,connection_method,host,port,serial_number,location,status FROM recorders WHERE id=?",
+            (str(recorder_id),),
+        ).fetchone()
+    return row_to_recorder(row)
+
+
+@app.get("/api/v1/recorders/{recorder_id}", response_model=RecorderRead)
+def get_recorder(recorder_id: UUID) -> RecorderRead:
+    with db_connection() as db:
+        row = db.execute(
+            "SELECT id,name,brand,model,recorder_type,connection_method,host,port,serial_number,location,status FROM recorders WHERE id=?",
+            (str(recorder_id),),
+        ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Recorder not found")
+    return row_to_recorder(row)
+
+
+@app.delete("/api/v1/recorders/{recorder_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_recorder(recorder_id: UUID) -> None:
+    with db_connection() as db:
+        cursor = db.execute("DELETE FROM recorders WHERE id=?", (str(recorder_id),))
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Recorder not found")

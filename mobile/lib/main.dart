@@ -130,7 +130,7 @@ class _AuthGateState extends State<AuthGate> {
             const Text('MOLIDO CCTV AI',textAlign:TextAlign.center,style:TextStyle(fontSize:22,fontWeight:FontWeight.w900,letterSpacing:1.2)),
             const SizedBox(height:8),Text(label('title'),textAlign:TextAlign.center,style:const TextStyle(fontSize:17,color:Colors.white70)),
             const SizedBox(height:24),
-            DropdownButtonFormField<String>(value:_language,decoration:InputDecoration(labelText:label('language')),
+            DropdownButtonFormField<String>(initialValue:_language,decoration:InputDecoration(labelText:label('language')),
               items:const [DropdownMenuItem(value:'fa',child:Text('فارسی')),DropdownMenuItem(value:'en',child:Text('English')),DropdownMenuItem(value:'ar',child:Text('العربية')),DropdownMenuItem(value:'tr',child:Text('Türkçe'))],
               onChanged:(v){if(v!=null)setState(()=>_language=v);}),
             const SizedBox(height:12),TextField(controller:_server,keyboardType:TextInputType.url,decoration:InputDecoration(labelText:label('server'),prefixIcon:const Icon(Icons.dns_outlined))),

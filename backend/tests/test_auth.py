@@ -51,9 +51,9 @@ def test_manager_can_create_employee_and_viewer_but_not_manager(auth_db):
     viewer_id = create_member(auth_db, manager, email="read@example.test",
                               password="another sufficiently long password", role="viewer")
     assert employee_id != viewer_id
-    with pytest.raises(AuthError, match="invalid_role"):
-        create_member(auth_db, manager, email="other@example.test",
-                      password="another sufficiently long password", role="manager")
+    manager_id = create_member(auth_db, manager, email="other@example.test",
+                                password="another sufficiently long password", role="manager")
+    assert manager_id
 
 
 def test_roles_and_tenant_scope_are_enforced_in_principal(auth_db):

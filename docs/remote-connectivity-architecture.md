@@ -35,12 +35,15 @@ A Molido mobile user and a Dahua (or other supported) DVR/NVR may be on complete
 - Do not expose raw RTSP credentials or unrestricted RTSP URLs to the mobile client. Use a short-lived authorized media session.
 - Do not claim end-to-end encrypted video unless every relay and key-management stage actually provides it.
 
-## Dahua official P2P / serial-number path (primary)
+## Dahua DMSS-compatible P2P path (primary)
 
 - The recorder must have P2P enabled and report **Online** while connected to the internet.
-- Add the recorder using its Dahua serial number (or supported QR code), device username/password, and any vendor account authorization required by the selected Dahua P2P/PaaS mode.
+- Match the DMSS user flow: add by device SN/QR, then authenticate with the recorder's own username/password and any device security/pairing step required by that model/app version.
+- The recorder's P2P setting must be enabled and show Online. The phone and recorder do not need to share a LAN; both need working internet access.
+- DMSS is Dahua's official end-user mobile client. DMSS compatibility describes the desired user workflow; it does not itself grant Molido access to DMSS private SDKs, cloud APIs or session tokens.
 - Serial number alone never authenticates a device.
-- Integrate only through a documented, authorized Dahua SDK/API and its licensing/terms. Do not reverse-engineer private cloud protocols or bypass vendor authentication.
+- Integrate only through a documented, authorized Dahua P2P SDK/API or partner interface and its licensing/terms. Do not reverse-engineer private cloud protocols, extract DMSS tokens or bypass vendor authentication.
+- Treat DoLynk Developer as a separate official enterprise/third-party platform option. Do not assume its APIs are the same as DMSS consumer P2P or that a DoLynk developer account is required for every DMSS-style device flow.
 - Determine exact model, firmware, region and supported P2P/PaaS mode before enabling the adapter.
 - If official integration access is unavailable, clearly mark P2P as not configured; offer the optional Molido Gateway or secure VPN/public-IP path.
 
@@ -54,4 +57,4 @@ A Molido mobile user and a Dahua (or other supported) DVR/NVR may be on complete
 
 ## Current status (truthful)
 
-The existing backend has local/direct-IP adapter probes for Dahua CGI, Hikvision ISAPI and generic ONVIF, plus simulated tests. The serial/device-ID path currently stores inventory identity only; it does not establish a Dahua official P2P/PaaS session. No Dahua SDK/API integration, Molido gateway enrollment service, outbound tunnel, cloud relay or remote video relay is implemented yet. A physical recorder and a gateway on its LAN are required to validate the complete remote path.
+The existing backend has local/direct-IP adapter probes for Dahua CGI, Hikvision ISAPI and generic ONVIF, plus simulated tests. The serial/device-ID path currently stores inventory identity only; it does not establish a Dahua DMSS-compatible P2P session. DoLynk Developer is documented as a separate possible enterprise integration, not as a proven replacement for DMSS P2P. No Dahua SDK/API integration, Molido gateway enrollment service, outbound tunnel, cloud relay or remote video relay is implemented yet. A physical recorder and a gateway on its LAN are required to validate the complete remote path.

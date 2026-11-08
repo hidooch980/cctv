@@ -153,13 +153,22 @@ class CameraItem {
 }
 
 class DashboardPage extends StatefulWidget {
-  const DashboardPage({super.key});
+  const DashboardPage({super.key, required this.token, required this.initialApiBase, required this.onLogout});
+  final String token;
+  final String initialApiBase;
+  final Future<void> Function() onLogout;
   @override
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  String apiBase = 'http://10.0.2.2:8000';
+  late String apiBase;
+  Map<String, String> get authHeaders => {'Authorization': 'Bearer ${widget.token}'};
+  @override
+  void initState() {
+    super.initState();
+    apiBase = widget.initialApiBase;
+  }
   bool connecting = false;
   String connection = 'Local demo mode';
   int selectedTab = 0;
@@ -176,7 +185,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> syncRecorders() async {
     try {
-      final res = await http.get(Uri.parse('$apiBase/api/v1/recorders')).timeout(const Duration(seconds: 8));
+      final res = await http.get(Uri.parse('$apiBase/api/v1/recorders'), headers: authHeaders).timeout(const Duration(seconds: 8));
       if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
       final data = (jsonDecode(res.body) as List).cast<Map<String,dynamic>>();
       if (mounted) setState(() { recorders..clear()..addAll(data); });
@@ -207,7 +216,7 @@ class _DashboardPageState extends State<DashboardPage> {
         if(recorder['connection_method']=='dahua_p2p') {
           if(Uri.parse(apiBase).scheme!='https') throw Exception('P2P credentials require HTTPS');
           final state=await http.post(Uri.parse('$apiBase/api/v1/recorders/$recorderId/p2p-connect-test'),
-            headers:{'Content-Type':'application/json'},
+            headers:{...authHeaders,'Content-Type':'application/json'},
             body:jsonEncode({'username':username.text.trim(),'password':password.text})).timeout(const Duration(seconds:8));
           if(state.statusCode==501) {
             if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(
@@ -239,7 +248,7 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> syncCameras() async {
     setState(() { connecting = true; connection = t('connecting'); });
     try {
-      final res = await http.get(Uri.parse('$apiBase/api/v1/cameras')).timeout(const Duration(seconds: 6));
+      final res = await http.get(Uri.parse('$apiBase/api/v1/cameras'), headers: authHeaders).timeout(const Duration(seconds: 6));
       if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
       final data = (jsonDecode(res.body) as List).map((e) => CameraItem.fromJson(e as Map<String, dynamic>)).toList();
       if (!mounted) return;
@@ -268,7 +277,7 @@ class _DashboardPageState extends State<DashboardPage> {
     if (ok != true || name.text.trim().isEmpty || host.text.trim().isEmpty) return;
     try {
       final res = await http.post(Uri.parse('$apiBase/api/v1/cameras'),
-        headers: {'Content-Type':'application/json'},
+        headers: {...authHeaders,'Content-Type':'application/json'},
         body: jsonEncode({'name':name.text.trim(),'brand':brand.text.trim(),'protocol':'onvif','host':host.text.trim()})).timeout(const Duration(seconds: 6));
       if (res.statusCode != 201) throw Exception('HTTP ${res.statusCode}');
       setState(() => cameras.add(CameraItem.fromJson(jsonDecode(res.body))));
@@ -358,7 +367,7 @@ class _DashboardPageState extends State<DashboardPage> {
               language=='fa'?'دستگاه ثبت شد اما اتصال برقرار نشد':'Recorder saved, but connection test failed')));
           }
         } else if(method=='dahua_p2p') {
-          final state=await http.get(Uri.parse('$apiBase/api/v1/recorders/$createdId/p2p-status')).timeout(const Duration(seconds:8));
+          final state=await http.get(Uri.parse('$apiBase/api/v1/recorders/$createdId/p2p-status'), headers: authHeaders).timeout(const Duration(seconds:8));
           if(state.statusCode!=200) throw Exception('P2P status unavailable');
           if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(
             language=='fa'?'سریال ثبت شد؛ رمز دستگاه ذخیره نشد. اتصال Molido تا دریافت SDK/API مجاز فعال نیست.':'Serial saved; device credentials were not stored. Molido cloud access awaits an authorized SDK/API.')));

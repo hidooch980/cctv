@@ -66,3 +66,12 @@ The existing camera inventory predating tenant setup is not automatically
 assigned to a tenant by this change. Before migrating a populated installation,
 take a backup and explicitly assign the legacy rows to the intended first
 tenant; do not copy unscoped records into every tenant database.
+
+## Android client
+
+The Flutter client includes a four-language sign-in screen, tenant slug selection,
+session validation on app start, sign-out/revocation, and a manager-only account
+creation form for all three roles. Bearer tokens are stored with
+`flutter_secure_storage` rather than ordinary preferences. Android backup is
+disabled, and cleartext networking is restricted to the Android emulator host
+`10.0.2.2`; non-emulator server URLs must use HTTPS.

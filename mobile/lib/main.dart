@@ -95,7 +95,8 @@ class _DashboardPageState extends State<DashboardPage> {
     ));
     if(ok==true) {
       try {
-        final response=await http.post(Uri.parse('$apiBase/api/v1/recorders/${recorder['id']}/connect-test'),
+        final recorderId = recorder['id'].toString();
+        final response=await http.post(Uri.parse('$apiBase/api/v1/recorders/$recorderId/connect-test'),
           headers:{'Content-Type':'application/json'},
           body:jsonEncode({'username':username.text,'password':password.text})).timeout(const Duration(seconds:20));
         if(response.statusCode!=200) throw Exception('HTTP ${response.statusCode}');
@@ -216,8 +217,9 @@ class _DashboardPageState extends State<DashboardPage> {
           headers:{'Content-Type':'application/json'},body:jsonEncode(payload)).timeout(const Duration(seconds:8));
         if (response.statusCode != 201) throw Exception('HTTP ${response.statusCode}');
         final created = jsonDecode(response.body) as Map<String,dynamic>;
+        final createdId = created['id'].toString();
         if(method=='ip') {
-          final tested=await http.post(Uri.parse('$apiBase/api/v1/recorders/${created['id']}/connect-test'),
+          final tested=await http.post(Uri.parse('$apiBase/api/v1/recorders/$createdId/connect-test'),
             headers:{'Content-Type':'application/json'},
             body:jsonEncode({'username':username.text.trim(),'password':password.text})).timeout(const Duration(seconds:20));
           if(tested.statusCode==200) {
@@ -328,14 +330,22 @@ class _DashboardPageState extends State<DashboardPage> {
       Text(language=='fa'?'دستگاه‌های ضبط':'Recorders',style:TextStyle(fontSize:17,fontWeight:FontWeight.bold)),
       TextButton(onPressed:syncRecorders,child:Text(language=='fa'?'بروزرسانی':'Refresh')),
     ]),
-    ...recorders.map((r)=>Card(child:ListTile(
-      leading:const Icon(Icons.dvr,color:brandRed),
-      title:Text('${r['name']} • ${r['recorder_type'].toString().toUpperCase()}'),
-      subtitle:Text('${r['brand']} • ${r['connection_method']} • ${r['status']}\\n${r['host']??r['serial_number']??''}',style:const TextStyle(fontSize:11)),
-      isThreeLine:true,
-      trailing:IconButton(icon:const Icon(Icons.wifi_tethering),tooltip:language=='fa'?'تست اتصال':'Test connection',
-        onPressed:()=>testRecorder(r)),
-    ))),
+    ...recorders.map((r) {
+      final recorderName = r['name']?.toString() ?? '';
+      final recorderType = r['recorder_type']?.toString().toUpperCase() ?? '';
+      final recorderBrand = r['brand']?.toString() ?? '';
+      final connectionMethod = r['connection_method']?.toString() ?? '';
+      final recorderStatus = r['status']?.toString() ?? '';
+      final recorderAddress = (r['host'] ?? r['serial_number'] ?? '').toString();
+      return Card(child:ListTile(
+        leading:const Icon(Icons.dvr,color:brandRed),
+        title:Text('$recorderName • $recorderType'),
+        subtitle:Text('$recorderBrand • $connectionMethod • $recorderStatus\n$recorderAddress',style:const TextStyle(fontSize:11)),
+        isThreeLine:true,
+        trailing:IconButton(icon:const Icon(Icons.wifi_tethering),tooltip:language=='fa'?'تست اتصال':'Test connection',
+          onPressed:()=>testRecorder(r)),
+      ));
+    }),
     ...cameras.map((c)=>Card(child:ListTile(leading:Container(width:42,height:42,decoration:BoxDecoration(color:brandRed.withValues(alpha:.13),borderRadius:BorderRadius.circular(12)),child:const Icon(Icons.videocam,color:brandRed)),title:Text(c.name),subtitle:Text('${c.brand}  •  ${c.host}\n${c.location}',style:const TextStyle(fontSize:11)),isThreeLine:true,trailing:const Icon(Icons.chevron_left)))),
     const SizedBox(height:12),FilledButton.icon(style:FilledButton.styleFrom(backgroundColor:brandRed),onPressed:addRecorder,icon:const Icon(Icons.dvr),label:Text(language=='fa'?'افزودن DVR / NVR':language=='ar'?'إضافة DVR / NVR':language=='tr'?'DVR / NVR ekle':'Add DVR / NVR')),
     const SizedBox(height:8),OutlinedButton.icon(onPressed:connecting?null:(){syncCameras();syncRecorders();},icon:const Icon(Icons.sync),label:Text(connecting?t('syncing'):t('syncServer'))),

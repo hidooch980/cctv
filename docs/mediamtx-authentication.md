@@ -46,3 +46,18 @@ The stream-session API therefore remains fail-closed and live view remains
 disabled. Do not set the enable flag in production until the remaining token
 issuer, source/path provisioning, network policy and end-to-end tests are
 completed.
+
+## Playback-token issuance API
+
+The authenticated endpoint
+`POST /api/v1/recorders/{recorder_id}/channels/{channel_id}/playback-token`
+issues a random, short-lived, tenant/session/channel/profile-scoped token.
+It returns a MediaMTX path and token but never returns the RTSP source URI.
+The endpoint is disabled by default and requires all three deployment settings:
+`MOLIDO_CCTV_MEDIAMTX_ENABLED=true`,
+`MOLIDO_CCTV_MEDIAMTX_PLAYBACK_ENABLED=true`, and a non-empty exact private
+CIDR allowlist. It rejects unvalidated channels and Dahua P2P channels.
+A token response is not proof of video playback: the MediaMTX path/source,
+network routing, gateway listeners and Android playback URL must still be
+configured and verified. `live_view` therefore remains false until the
+end-to-end gateway path is operational.

@@ -43,10 +43,21 @@ The UI must let the operator choose **IP connection** or **Serial/Device ID conn
 5. Surface recording schedule, retention, disk/RAID health and export capability only when exposed by the model's API.
 6. Alert on recorder offline, channel loss, disk failure, recording gap and clock drift.
 
-## Integration boundaries
+## Adapter coverage currently implemented
+- **ONVIF (generic):** authenticated device capabilities, media service resolution, profile enumeration, and RTSP stream URI retrieval.
+- **Hikvision:** ISAPI device information and supported input/stream channel endpoints; falls back to ONVIF when the ISAPI path is unavailable.
+- **Dahua:** CGI system information and channel-title enumeration; ONVIF remains the fallback for media profiles and RTSP stream URIs.
+- **Uniview, Tiandy and other ONVIF-capable brands:** generic ONVIF adapter path. A dedicated vendor API adapter is not yet certified for these brands.
+- **Serial/P2P:** the inventory accepts serial/device IDs, but live serial/P2P authentication is not enabled until the relevant manufacturer's SDK, authorization material and terms are available.
+
+The connection-test endpoint is \`POST /api/v1/recorders/{id}/connect-test\`; it accepts credentials for that single request, performs an authenticated probe, and does not persist the submitted username/password. Discovered channels are listed at \`GET /api/v1/recorders/{id}/channels\`.
+
+
 ONVIF discovery/profile/media support, RTSP live streaming, and vendor-specific playback/export are separate adapter capabilities. They must be capability-detected and validated against actual model/firmware. A generic RTSP URL does not guarantee playback search or export support. Do not claim universal playback compatibility.
 
 ## Acceptance tests
+- Exercise ONVIF profile enumeration and RTSP URI retrieval using mock SOAP responses; verify RTSP URIs never retain embedded credentials.
+- Exercise Hikvision ISAPI and Dahua CGI channel parsers using mock HTTP responses.
 - Register DVR/NVR/XVR through direct IP login and through serial/device-ID pairing where the vendor supports it.
 - Verify serial-only input is not treated as authentication; require the vendor's documented proof/pairing flow.
 - Verify credentials are never returned, logged or stored in plaintext; validate encrypted secret storage before persistent credential support is enabled.
@@ -63,4 +74,5 @@ ONVIF discovery/profile/media support, RTSP live streaming, and vendor-specific 
 - The Android app includes a four-language DVR/NVR/XVR registration form with a selectable IP or serial connection method.
 - Submitted passwords and pairing codes are request-only fields; the recorder inventory database and API responses do not persist or expose them.
 - Registration currently records device configuration with `pending` status. It does not yet establish a live vendor session.
-- ONVIF/RTSP discovery, manufacturer P2P/SDK authentication, live streaming, recorded playback, disk telemetry and physical-device compatibility still require adapter implementation and authorized hardware/firmware tests.
+- ONVIF, Hikvision ISAPI and Dahua CGI adapter code plus mock-transport tests are present. Mock tests do not prove compatibility with physical recorders.
+- Physical-device connectivity, firmware-specific channel discovery, stream decoding, manufacturer P2P/SDK authentication, recorded playback and disk telemetry still require authorized hardware/firmware tests.

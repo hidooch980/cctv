@@ -384,17 +384,6 @@ class _DashboardPageState extends State<DashboardPage> {
     serial.dispose();username.dispose();password.dispose();
   }
 
-  Future<void> editServer() async {
-    final field = TextEditingController(text: apiBase);
-    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-      backgroundColor: panel, title: Text(t('server')),
-      content: TextField(controller: field, keyboardType: TextInputType.url, decoration: const InputDecoration(hintText:'http://192.168.1.10:8000')),
-      actions: [TextButton(onPressed:()=>Navigator.pop(ctx,false), child:Text(t('cancel'))), FilledButton(onPressed:()=>Navigator.pop(ctx,true), child:Text(t('save')))],
-    ));
-    if (ok == true && field.text.trim().isNotEmpty) setState(() => apiBase = field.text.trim().replaceAll(RegExp(r'/$'), ''));
-    field.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     final pages = [_home(), _cameraList(), _events(), _settings()];
@@ -498,10 +487,11 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Widget _settings()=>ListView(padding:const EdgeInsets.all(16),children:[
     Text(t('appSettings'),style:TextStyle(fontSize:19,fontWeight:FontWeight.bold)),const SizedBox(height:12),
-    Card(child:ListTile(leading:const Icon(Icons.dns_outlined,color:brandRed),title:Text(t('server')),subtitle:Text(apiBase),trailing:const Icon(Icons.edit),onTap:editServer)),
+    Card(child:ListTile(leading:const Icon(Icons.dns_outlined,color:brandRed),title:Text(t('server')),subtitle:Text(apiBase))),
     Card(child:ListTile(leading:const Icon(Icons.language,color:brandRed),title:Text(t('language')),trailing:DropdownButton<String>(value:language,items:const [DropdownMenuItem(value:'fa',child:Text('فارسی')),DropdownMenuItem(value:'en',child:Text('English')),DropdownMenuItem(value:'ar',child:Text('العربية')),DropdownMenuItem(value:'tr',child:Text('Türkçe'))],onChanged:(v){if(v!=null)setState(()=>language=v);}))),
     Card(child:ListTile(leading:const Icon(Icons.security,color:brandRed),title:Text(t('security')),subtitle:Text(t('credentialNote')))),
     Card(child:ListTile(leading:const Icon(Icons.info_outline,color:brandRed),title:Text(t('version')),subtitle:const Text('0.1.0 • Android Test'))),
     const SizedBox(height:10),FilledButton.icon(style:FilledButton.styleFrom(backgroundColor:brandRed),onPressed:syncCameras,icon:const Icon(Icons.link),label:Text(t('check'))),
+    const SizedBox(height:10),OutlinedButton.icon(onPressed:(){widget.onLogout();},icon:const Icon(Icons.logout),label:Text(language=='fa'?'خروج امن':language=='ar'?'تسجيل الخروج':language=='tr'?'Çıkış yap':'Sign out')),
   ]);
 }

@@ -287,8 +287,9 @@ def test_api_rejects_missing_bearer_token():
     saved = client.headers.get("Authorization")
     client.headers.pop("Authorization", None)
     try:
-        response = client.get("/api/v1/cameras")
-        assert response.status_code == 401
+        for path in ("/api/v1/cameras", "/api/v1/recorders", "/api/v1/streaming/capabilities", "/api/v1/auth/me"):
+            response = client.get(path)
+            assert response.status_code == 401
     finally:
         if saved:
             client.headers.update({"Authorization": saved})

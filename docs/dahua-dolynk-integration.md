@@ -21,9 +21,9 @@ Published onboarding may require:
 - Android offers a distinct **Dahua DMSS-compatible P2P** registration mode, separate from local IP and generic serial registration.
 - Device serial/QR is an identifier only, never an authentication secret.
 - The recorder must have P2P enabled and show Online on its own internet connection; the phone and recorder may be on different networks.
-- P2P and PaaS/account mode may differ by client/account configuration, region, model and firmware. DMSS consumer P2P and DoLynk enterprise APIs must be assessed separately.
+- Dahua's current support guidance distinguishes P2P (used by DMSS in local/non-account mode) from PaaS (used by DMSS in account mode). P2P devices may use the T2UServer protocol; P2P/PaaS server endpoints and firewall requirements vary by device capability. This network guidance is not a third-party SDK/API contract and must not be used to implement an undocumented client. DMSS consumer P2P and DoLynk enterprise APIs must be assessed separately.
 - Cloud account authorization, device online status, channel discovery, live video, playback and alarms are separate capabilities.
-- Until official credentials and the approved adapter are configured, backend status explicitly reports `credentials_required`, `online=false`, `sdk_connected=false` and `cloud_video=false`. No successful connection is simulated.
+- Until official credentials and the approved adapter are configured, backend status explicitly reports `not_configured`, `online=false`, `sdk_connected=false` and `cloud_video=false`. No successful connection is simulated.
 - API credentials and device passwords must not be stored in source control, logs or inventory responses. Persistent secrets require reviewed encryption/key management.
 
 ## Molido API contract
@@ -46,4 +46,5 @@ Published onboarding may require:
 - DoLynk Developer: https://www.dahuasecurity.com/products/software/dolynk-cloud/doylnk-product/eco
 - Dahua SDK/software download center: https://www.dahuasecurity.com/download-center/softwares
 - Dahua API portal: https://www.dahuasecurity.com/api/
-- Dahua P2P/PaaS modes: https://dahuatech.zendesk.com/hc/en-gb/articles/39851775665554-Ports-of-P2P-PaaS-Services-Access-and-P2P-PaaS-Server-Domain-Name
+- Dahua P2P/PaaS modes and network requirements: https://dahuatech.zendesk.com/hc/en-gb/articles/39851775665554-Ports-of-P2P-PaaS-Services-Access-and-P2P-PaaS-Server-Domain-Name
+- Dahua P2P/PaaS offline troubleshooting and T2UServer/VSP_PaaS notes: https://dahuatech.zendesk.com/hc/en-gb/articles/39836901072658-P2P-PaaS-Offline-Related-Troubleshooting-Steps

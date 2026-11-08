@@ -206,7 +206,7 @@ class _DashboardPageState extends State<DashboardPage> {
             decoration: InputDecoration(labelText: language == 'fa' ? 'رمز عبور (حداقل ۱۲ کاراکتر)' : 'Password (min 12 characters)')),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            value: role,
+            initialValue: role,
             decoration: InputDecoration(labelText: language == 'fa' ? 'نقش کاربر' : 'Account role'),
             items: [
               DropdownMenuItem(value: 'manager', child: Text(language == 'fa' ? 'مدیر' : 'Manager')),

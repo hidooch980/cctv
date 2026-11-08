@@ -1,4 +1,5 @@
 import sys
+import sqlite3
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -83,3 +84,44 @@ def test_camera_capacity_is_limited_to_one_hundred() -> None:
     )
     assert overflow.status_code == 409
     assert len(client.get("/api/v1/cameras").json()) == 100
+
+
+
+def test_create_ip_recorder_without_persisting_credentials():
+    payload = {
+        "name": "Main DVR", "brand": "Dahua", "recorder_type": "dvr",
+        "connection_method": "ip", "host": "192.0.2.50", "port": 37777,
+        "username": "operator", "password": "secret-not-to-store",
+    }
+    response = client.post("/api/v1/recorders", json=payload)
+    assert response.status_code == 201
+    body = response.json()
+    assert body["connection_method"] == "ip"
+    assert body["host"] == "192.0.2.50"
+    assert "username" not in body and "password" not in body
+    with sqlite3.connect(app.state.database_path) as db:
+        stored = " ".join(str(x) for x in db.execute("SELECT * FROM recorders").fetchone())
+    assert "secret-not-to-store" not in stored
+    assert "operator" not in stored
+
+
+def test_create_serial_recorder_requires_vendor_authorization():
+    invalid = {
+        "name": "Remote NVR", "brand": "Hikvision", "recorder_type": "nvr",
+        "connection_method": "serial", "serial_number": "SN123456",
+    }
+    assert client.post("/api/v1/recorders", json=invalid).status_code == 422
+    valid = {**invalid, "pairing_code": "one-time-proof"}
+    response = client.post("/api/v1/recorders", json=valid)
+    assert response.status_code == 201
+    assert response.json()["connection_method"] == "serial"
+    assert response.json()["serial_number"] == "SN123456"
+    assert "pairing_code" not in response.text
+
+
+def test_ip_recorder_requires_ip_login_fields():
+    payload = {
+        "name": "Missing login", "brand": "Generic", "recorder_type": "xvr",
+        "connection_method": "ip", "host": "192.0.2.51",
+    }
+    assert client.post("/api/v1/recorders", json=payload).status_code == 422

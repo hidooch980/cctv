@@ -60,9 +60,7 @@ class _DashboardPageState extends State<DashboardPage> {
       if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
       final data = (jsonDecode(res.body) as List).map((e) => CameraItem.fromJson(e as Map<String, dynamic>)).toList();
       if (!mounted) return;
-      setState(() { cameras
-        ..clear()
-        ..addAll(data); connection = 'متصل به سرور'; });
+      setState(() { cameras..clear()..addAll(data); connection = 'متصل به سرور'; });
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('فهرست دوربین‌ها به‌روزرسانی شد')));
     } catch (_) {
       if (!mounted) return;
@@ -76,8 +74,7 @@ class _DashboardPageState extends State<DashboardPage> {
     final host = TextEditingController();
     final brand = TextEditingController(text: 'Dahua');
     final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-      backgroundColor: panel,
-      title: const Text('افزودن دوربین'),
+      backgroundColor: panel, title: const Text('افزودن دوربین'),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
         TextField(controller: name, decoration: const InputDecoration(labelText: 'نام دوربین')),
         TextField(controller: host, decoration: const InputDecoration(labelText: 'IP یا Host', hintText: '192.168.1.100')),
@@ -96,7 +93,7 @@ class _DashboardPageState extends State<DashboardPage> {
     } catch (_) {
       setState(() => cameras.add(CameraItem(name:name.text.trim(),brand:brand.text.trim(),host:host.text.trim(),status:'local')));
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('فقط در فهرست محلی افزوده شد؛ سرور متصل نیست')));
-    }
+    } finally { name.dispose(); host.dispose(); brand.dispose(); }
   }
 
   Future<void> editServer() async {
@@ -107,16 +104,12 @@ class _DashboardPageState extends State<DashboardPage> {
       actions: [TextButton(onPressed:()=>Navigator.pop(ctx,false), child:const Text('انصراف')), FilledButton(onPressed:()=>Navigator.pop(ctx,true), child:const Text('ذخیره'))],
     ));
     if (ok == true && field.text.trim().isNotEmpty) setState(() => apiBase = field.text.trim().replaceAll(RegExp(r'/$'), ''));
+    field.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final pages = [
-      _home(),
-      _cameraList(),
-      _events(),
-      _settings(),
-    ];
+    final pages = [_home(), _cameraList(), _events(), _settings()];
     return Directionality(textDirection: TextDirection.rtl, child: Scaffold(
       appBar: AppBar(
         backgroundColor: ink,
@@ -131,7 +124,7 @@ class _DashboardPageState extends State<DashboardPage> {
         actions:[IconButton(onPressed:syncCameras,icon:const Icon(Icons.sync_rounded),tooltip:'همگام‌سازی')],
       ),
       body: pages[selectedTab],
-      floatingActionButton: selectedTab == 1 ? FloatingActionButton.background(
+      floatingActionButton: selectedTab == 1 ? FloatingActionButton(
         onPressed:addCamera, backgroundColor:brandRed, child:const Icon(Icons.add)
       ) : null,
       bottomNavigationBar: NavigationBar(

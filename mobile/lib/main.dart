@@ -87,7 +87,7 @@ class _AuthGateState extends State<AuthGate> {
       if (!{'http', 'https'}.contains(uri.scheme) || uri.host.isEmpty ||
           uri.userInfo.isNotEmpty || uri.query.isNotEmpty || uri.fragment.isNotEmpty ||
           (uri.path.isNotEmpty && uri.path != '/')) throw Exception('Invalid server URL');
-      if (uri.scheme == 'http' && !{'10.0.2.2', 'localhost', '127.0.0.1'}.contains(uri.host)) {
+      if (uri.scheme == 'http' && uri.host != '10.0.2.2') {
         throw Exception('HTTPS required');
       }
       final response = await http.post(Uri.parse('$server/api/v1/auth/login'),

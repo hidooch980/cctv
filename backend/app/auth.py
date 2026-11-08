@@ -81,6 +81,7 @@ def init_auth_schema(path: str | Path) -> None:
             id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES auth_sessions(id) ON DELETE CASCADE,
             tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
             token_hash TEXT NOT NULL UNIQUE, media_path TEXT NOT NULL,
+            protocol TEXT NOT NULL DEFAULT 'hls' CHECK(protocol IN ('hls','webrtc')),
             action TEXT NOT NULL CHECK(action IN ('read')),
             expires_at INTEGER NOT NULL, revoked_at INTEGER, created_at INTEGER NOT NULL
         );
@@ -90,6 +91,10 @@ def init_auth_schema(path: str | Path) -> None:
             window_started_at INTEGER NOT NULL, locked_until INTEGER NOT NULL DEFAULT 0
         );
         """)
+        # Backward-compatible migration for databases created before transport binding.
+        columns = {row["name"] for row in db.execute("PRAGMA table_info(media_tokens)")}
+        if "protocol" not in columns:
+            db.execute("ALTER TABLE media_tokens ADD COLUMN protocol TEXT NOT NULL DEFAULT 'hls'")
 
 
 def bootstrap_admin(path: str | Path, *, configured_secret: str | None,
@@ -216,13 +221,15 @@ def logout(path: str | Path, token: str, now: int | None = None) -> None:
 
 
 def issue_media_token(path: str | Path, principal: Principal, *,
-                      media_path: str, ttl_seconds: int = 300,
+                      media_path: str, protocol: str = "hls", ttl_seconds: int = 300,
                       now: int | None = None) -> tuple[str, int]:
     """Issue a one-time opaque credential bound to one session and one MediaMTX path."""
     if not principal.allows("stream:view"):
         raise AuthError("forbidden")
     if not 60 <= ttl_seconds <= 900:
         raise AuthError("invalid_media_token_ttl")
+    if protocol not in {"hls", "webrtc"}:
+        raise AuthError("media_action_forbidden")
     if not media_path or len(media_path) > 512 or media_path.startswith("/") or ".." in media_path:
         raise AuthError("invalid_media_path")
     current = int(time.time()) if now is None else int(now)
@@ -235,10 +242,10 @@ def issue_media_token(path: str | Path, principal: Principal, *,
         if not session or session["tenant_id"] != principal.tenant_id or session["revoked_at"] is not None or session["expires_at"] <= current:
             raise AuthError("invalid_session")
         db.execute("""INSERT INTO media_tokens
-                      (id,session_id,tenant_id,token_hash,media_path,action,expires_at,created_at)
-                      VALUES(?,?,?,?,?,?,?,?)""",
+                      (id,session_id,tenant_id,token_hash,media_path,protocol,action,expires_at,created_at)
+                      VALUES(?,?,?,?,?,?,?,?,?)""",
                    (str(uuid4()), principal.session_id, principal.tenant_id,
-                    issued.token_hash, media_path, "read", issued.expires_at, current))
+                    issued.token_hash, media_path, protocol, "read", issued.expires_at, current))
     return issued.token, issued.expires_at
 
 
@@ -255,14 +262,14 @@ def verify_media_token(path: str | Path, *, token: str, media_path: str,
     current = int(time.time()) if now is None else int(now)
     with connect(path) as db:
         row = db.execute("""
-            SELECT mt.expires_at,mt.revoked_at,s.revoked_at AS session_revoked,
+            SELECT mt.expires_at,mt.revoked_at,mt.protocol,s.revoked_at AS session_revoked,
                    s.expires_at AS session_expires,u.is_active
             FROM media_tokens mt
             JOIN auth_sessions s ON s.id=mt.session_id
             JOIN users u ON u.id=s.user_id
             WHERE mt.token_hash=? AND mt.media_path=? AND mt.action=?
         """, (token_hash, media_path, "read")).fetchone()
-        if (not row or row["revoked_at"] is not None or row["session_revoked"] is not None
+        if (not row or row["protocol"] != protocol or row["revoked_at"] is not None or row["session_revoked"] is not None
                 or not row["is_active"] or row["expires_at"] <= current
                 or row["session_expires"] <= current):
             raise AuthError("invalid_media_token")

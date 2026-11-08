@@ -49,6 +49,7 @@ class _AuthGateState extends State<AuthGate> {
   final _password = TextEditingController();
   String _language = 'fa';
   String? _token;
+  String _role = 'viewer';
   bool _loading = true;
   String? _error;
   String label(String key) {
@@ -70,8 +71,10 @@ class _AuthGateState extends State<AuthGate> {
       if (savedToken != null && savedToken.isNotEmpty) {
         final response = await http.get(Uri.parse('${_server.text.trim()}/api/v1/auth/me'),
           headers: {'Authorization': 'Bearer $savedToken'}).timeout(const Duration(seconds: 8));
-        if (response.statusCode == 200) { if (mounted) setState(() => _token = savedToken); }
-        else { await _storage.delete(key: 'access_token'); }
+        if (response.statusCode == 200) {
+          final profile = jsonDecode(response.body) as Map<String, dynamic>;
+          if (mounted) setState(() { _token = savedToken; _role = profile['role']?.toString() ?? 'viewer'; });
+        } else { await _storage.delete(key: 'access_token'); }
       }
     } catch (_) { await _storage.delete(key: 'access_token'); }
     finally { if (mounted) setState(() => _loading = false); }
@@ -90,9 +93,13 @@ class _AuthGateState extends State<AuthGate> {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final token = data['access_token']?.toString();
       if (token == null || token.isEmpty) throw Exception('Missing token');
+      final profileResponse = await http.get(Uri.parse('$server/api/v1/auth/me'),
+        headers: {'Authorization': 'Bearer $token'}).timeout(const Duration(seconds: 8));
+      if (profileResponse.statusCode != 200) throw Exception('Could not load account');
+      final profile = jsonDecode(profileResponse.body) as Map<String, dynamic>;
       await _storage.write(key: 'access_token', value: token);
       await _storage.write(key: 'api_base', value: server);
-      if (mounted) setState(() { _token = token; _server.text = server; });
+      if (mounted) setState(() { _token = token; _role = profile['role']?.toString() ?? 'viewer'; _server.text = server; });
     } catch (_) { if (mounted) setState(() => _error = label('failed')); }
     finally { if (mounted) setState(() => _loading = false); }
   }
@@ -153,8 +160,9 @@ class CameraItem {
 }
 
 class DashboardPage extends StatefulWidget {
-  const DashboardPage({super.key, required this.token, required this.initialApiBase, required this.onLogout});
+  const DashboardPage({super.key, required this.token, required this.role, required this.initialApiBase, required this.onLogout});
   final String token;
+  final String role;
   final String initialApiBase;
   final Future<void> Function() onLogout;
   @override
@@ -182,6 +190,54 @@ class _DashboardPageState extends State<DashboardPage> {
     CameraItem(name: 'انبار', brand: 'ONVIF', host: '192.168.1.103', status: 'demo'),
   ];
 
+
+  Future<void> createUser() async {
+    final email = TextEditingController();
+    final password = TextEditingController();
+    String role = 'employee';
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => StatefulBuilder(
+      builder: (ctx, refresh) => AlertDialog(
+        backgroundColor: panel,
+        title: Text(language == 'fa' ? 'ایجاد حساب کاربری' : language == 'ar' ? 'إنشاء حساب' : language == 'tr' ? 'Hesap oluştur' : 'Create account'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: email, keyboardType: TextInputType.emailAddress,
+            decoration: InputDecoration(labelText: language == 'fa' ? 'ایمیل' : 'Email')),
+          TextField(controller: password, obscureText: true,
+            decoration: InputDecoration(labelText: language == 'fa' ? 'رمز عبور (حداقل ۱۲ کاراکتر)' : 'Password (min 12 characters)')),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: role,
+            decoration: InputDecoration(labelText: language == 'fa' ? 'نقش کاربر' : 'Account role'),
+            items: [
+              DropdownMenuItem(value: 'manager', child: Text(language == 'fa' ? 'مدیر' : 'Manager')),
+              DropdownMenuItem(value: 'employee', child: Text(language == 'fa' ? 'کارمند' : 'Employee')),
+              DropdownMenuItem(value: 'viewer', child: Text(language == 'fa' ? 'مشاهده‌گر' : 'Viewer')),
+            ],
+            onChanged: (value) { if (value != null) refresh(() => role = value); },
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(t('cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(t('save'))),
+        ],
+      ),
+    ));
+    if (ok == true) {
+      try {
+        final response = await http.post(Uri.parse('$apiBase/api/v1/auth/users'),
+          headers: {...authHeaders, 'Content-Type': 'application/json'},
+          body: jsonEncode({'email': email.text.trim(), 'password': password.text, 'role': role}))
+          .timeout(const Duration(seconds: 12));
+        if (response.statusCode != 201) throw Exception('HTTP ${response.statusCode}');
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
+          language == 'fa' ? 'حساب کاربری با موفقیت ایجاد شد' : 'Account created successfully')));
+      } catch (_) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
+          language == 'fa' ? 'ایجاد حساب انجام نشد؛ مجوز مدیر و اطلاعات را بررسی کنید' : 'Could not create account; check manager access and fields')));
+      }
+    }
+    email.dispose(); password.dispose();
+  }
 
   Future<void> syncRecorders() async {
     try {
@@ -492,6 +548,9 @@ class _DashboardPageState extends State<DashboardPage> {
     Card(child:ListTile(leading:const Icon(Icons.security,color:brandRed),title:Text(t('security')),subtitle:Text(t('credentialNote')))),
     Card(child:ListTile(leading:const Icon(Icons.info_outline,color:brandRed),title:Text(t('version')),subtitle:const Text('0.1.0 • Android Test'))),
     const SizedBox(height:10),FilledButton.icon(style:FilledButton.styleFrom(backgroundColor:brandRed),onPressed:syncCameras,icon:const Icon(Icons.link),label:Text(t('check'))),
+    if(widget.role == 'manager') ...[
+      const SizedBox(height:10),OutlinedButton.icon(onPressed:createUser,icon:const Icon(Icons.person_add_alt_1),label:Text(language=='fa'?'ایجاد حساب مدیر / کارمند / مشاهده‌گر':'Create manager / employee / viewer account')),
+    ],
     const SizedBox(height:10),OutlinedButton.icon(onPressed:(){widget.onLogout();},icon:const Icon(Icons.logout),label:Text(language=='fa'?'خروج امن':language=='ar'?'تسجيل الخروج':language=='tr'?'Çıkış yap':'Sign out')),
   ]);
 }

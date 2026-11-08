@@ -10,18 +10,35 @@ permissions:
   contents: write
 jobs:
   release:
-    if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEY_ALIAS != '' && secrets.ANDROID_KEY_PASSWORD != '' && secrets.ANDROID_STORE_PASSWORD != '' }}
     runs-on: ubuntu-latest
     steps:
+      - id: signing-secrets
+        name: Check release signing secrets
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ] && [ -n "$STORE_PASSWORD" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Release skipped: configure all four Android signing secrets first."
+          fi
       - uses: actions/checkout@v4
+        if: steps.signing-secrets.outputs.ready == 'true'
       - uses: subosito/flutter-action@v2
+        if: steps.signing-secrets.outputs.ready == 'true'
         with:
           channel: stable
           cache: true
       - name: Generate Android project scaffolding
+        if: steps.signing-secrets.outputs.ready == 'true'
         run: flutter create --platforms=android --org=com.molido --project-name=molido_cctv .
         working-directory: mobile
       - name: Configure signing credentials
+        if: steps.signing-secrets.outputs.ready == 'true'
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -38,14 +55,19 @@ jobs:
           python ../scripts/configure_android_signing.py app
         working-directory: mobile/android
       - run: flutter pub get
+        if: steps.signing-secrets.outputs.ready == 'true'
         working-directory: mobile
       - run: flutter analyze
+        if: steps.signing-secrets.outputs.ready == 'true'
         working-directory: mobile
       - run: flutter test
+        if: steps.signing-secrets.outputs.ready == 'true'
         working-directory: mobile
       - run: flutter build apk --release
+        if: steps.signing-secrets.outputs.ready == 'true'
         working-directory: mobile
       - uses: softprops/action-gh-release@v2
+        if: steps.signing-secrets.outputs.ready == 'true'
         with:
           tag_name: ${{ inputs.release_tag }}
           files: mobile/build/app/outputs/flutter-apk/app-release.apk

@@ -108,13 +108,18 @@ def test_mediamtx_token_is_path_transport_and_session_bound(auth_db):
                      password="a sufficiently long password", tenant_slug="example")
     principal = resolve_principal(auth_db, token, tenant_id)
     media_token, expiry = issue_media_token(
-        auth_db, principal, media_path="tenant/site-a/camera-1/sub", ttl_seconds=300, now=2000,
+        auth_db, principal, media_path="tenant/site-a/camera-1/sub", protocol="webrtc", ttl_seconds=300, now=2000,
     )
     assert expiry == 2300
     assert verify_media_token(
         auth_db, token=media_token, media_path="tenant/site-a/camera-1/sub",
         action="read", protocol="webrtc", now=2001,
     ) == 2300
+    with pytest.raises(AuthError, match="invalid_media_token"):
+        verify_media_token(
+            auth_db, token=media_token, media_path="tenant/site-a/camera-1/sub",
+            action="read", protocol="hls", now=2001,
+        )
     with pytest.raises(AuthError, match="invalid_media_token"):
         verify_media_token(
             auth_db, token=media_token, media_path="tenant/other/camera-1/sub",

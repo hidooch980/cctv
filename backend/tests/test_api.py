@@ -227,3 +227,42 @@ def test_dahua_p2p_connect_test_is_not_faked():
     )
     assert response.status_code == 501
     assert "DMSS-compatible" in response.json()["detail"]
+
+
+
+def test_streaming_capabilities_report_provider_disabled():
+    response = client.get("/api/v1/streaming/capabilities")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["control_plane"] == "available"
+    assert body["media_provider"] == "disabled"
+    assert body["live_view"] is False
+    assert body["transports"] == []
+
+
+def test_stream_session_fails_closed_until_media_provider_is_configured():
+    from uuid import uuid4
+
+    created = client.post("/api/v1/recorders", json={
+        "name": "Local NVR", "brand": "Dahua", "recorder_type": "nvr",
+        "connection_method": "ip", "host": "192.0.2.25",
+        "username": "operator", "password": "not-persisted",
+    })
+    assert created.status_code == 201
+    recorder_id = created.json()["id"]
+    channel_id = uuid4()
+    with main_module.db_connection() as db:
+        db.execute(
+            """INSERT INTO recorder_channels
+               (id,recorder_id,channel_number,name,profile_token,stream_uri,status)
+               VALUES (?,?,?,?,?,?,?)""",
+            (str(channel_id), recorder_id, 1, "Front gate", "profile-1",
+             "rtsp://192.0.2.25:554/cam/realmonitor?channel=1&subtype=1", "discovered"),
+        )
+
+    response = client.post(
+        f"/api/v1/recorders/{recorder_id}/channels/{channel_id}/stream-sessions",
+        json={"transport": "webrtc", "profile": "sub", "session_ttl_seconds": 300},
+    )
+    assert response.status_code == 503
+    assert "no stream is active" in response.json()["detail"]

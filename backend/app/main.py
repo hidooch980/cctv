@@ -111,11 +111,14 @@ class RecorderCreate(BaseModel):
         if self.connection_method == RecorderConnectionMethod.ip:
             if not self.host or not self.username or not self.password:
                 raise ValueError("IP connection requires host, username and password")
-        if self.connection_method in (RecorderConnectionMethod.serial, RecorderConnectionMethod.dahua_p2p):
+        if self.connection_method == RecorderConnectionMethod.serial:
             if not self.serial_number or not (self.username or self.pairing_code):
-                raise ValueError("Serial/P2P connection requires serial_number and vendor authorization proof")
-        if self.connection_method == RecorderConnectionMethod.dahua_p2p and self.brand.strip().lower() != "dahua":
-            raise ValueError("dahua_p2p connection is only valid for Dahua recorders")
+                raise ValueError("Serial connection requires serial_number and vendor authorization proof")
+        if self.connection_method == RecorderConnectionMethod.dahua_p2p:
+            if self.brand.strip().lower() != "dahua":
+                raise ValueError("dahua_p2p connection is only valid for Dahua recorders")
+            if not self.serial_number or not self.username or not self.password:
+                raise ValueError("Dahua P2P requires serial_number, recorder username and recorder password")
         return self
 
 
@@ -399,12 +402,12 @@ def dahua_p2p_status(recorder_id: UUID) -> dict:
         "vendor": "Dahua",
         "connection_mode": "official_p2p_cloud",
         "serial_number_registered": bool(recorder["serial_number"]),
-        "integration_state": "credentials_required",
+        "integration_state": "not_configured",
         "device_state": "unknown",
         "online": False,
         "sdk_connected": False,
         "cloud_video": False,
-        "next_step": "Complete Dahua DoLynk Developer company verification and configure authorized API credentials.",
+        "next_step": "Configure an officially authorized Dahua third-party P2P SDK/API or partner interface. DoLynk is a separate optional enterprise path, not a prerequisite for DMSS-compatible consumer P2P.",
         "credentials_persisted": False,
     }
 
@@ -422,7 +425,7 @@ def dahua_p2p_connect_test(recorder_id: UUID) -> dict:
         raise HTTPException(status_code=409, detail="Recorder is not registered in Dahua P2P mode")
     raise HTTPException(
         status_code=501,
-        detail="Official Dahua DoLynk Developer API credentials and approved adapter are not configured; no cloud connection was attempted.",
+        detail="An officially authorized Dahua third-party P2P SDK/API or partner adapter is not configured; DoLynk is a separate optional enterprise integration. No cloud connection was attempted.",
     )
 
 

@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -12,8 +13,7 @@ from app.streaming import (
 )
 
 
-@pytest.mark.asyncio
-async def test_disabled_provider_never_fakes_a_stream():
+def test_disabled_provider_never_fakes_a_stream():
     provider = DisabledStreamProvider()
     command = StreamStartCommand(
         tenant_id="test-tenant",
@@ -24,12 +24,19 @@ async def test_disabled_provider_never_fakes_a_stream():
         profile=StreamProfile.sub,
         expires_at=datetime.now(timezone.utc),
     )
-    with pytest.raises(ProviderNotConfigured):
-        await provider.start(command)
+
+    async def run():
+        with pytest.raises(ProviderNotConfigured):
+            await provider.start(command)
+
+    asyncio.run(run())
 
 
-@pytest.mark.asyncio
-async def test_disabled_provider_does_not_claim_stop_success():
+def test_disabled_provider_does_not_claim_stop_success():
     provider = DisabledStreamProvider()
-    with pytest.raises(ProviderNotConfigured):
-        await provider.stop(uuid4())
+
+    async def run():
+        with pytest.raises(ProviderNotConfigured):
+            await provider.stop(uuid4())
+
+    asyncio.run(run())

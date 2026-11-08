@@ -349,3 +349,35 @@ def test_tenant_data_isolation_uses_separate_database_files(tmp_path):
     assert all(item["name"] != "Second tenant camera"
                for item in first_tenant_cameras.json())
     assert tenant_database_path(second_tenant) != tenant_database_path(app.state.test_tenant_id)
+
+
+
+def test_mediamtx_http_auth_callback_accepts_only_valid_scoped_token():
+    from fastapi.testclient import TestClient
+    from app.auth import issue_media_token, resolve_principal
+
+    app.state.mediamtx_enabled = True
+    app.state.mediamtx_allowed_cidrs = ["127.0.0.1/32"]
+    token = client.headers["Authorization"].split(" ", 1)[1]
+    principal = resolve_principal(app.state.auth_database_path, token)
+    media_path = f"tenant/{principal.tenant_id}/camera-1/sub"
+    media_token, _ = issue_media_token(
+        app.state.auth_database_path, principal, media_path=media_path, ttl_seconds=300,
+    )
+    private_client = TestClient(app, client=("127.0.0.1", 12345))
+    payload = {
+        "user": "", "password": "", "token": media_token,
+        "ip": "127.0.0.1", "action": "read", "path": media_path,
+        "protocol": "webrtc", "id": "session-1", "query": "", "userAgent": "test",
+    }
+    try:
+        accepted = private_client.post("/api/v1/media/mediamtx/auth", json=payload)
+        assert accepted.status_code == 200
+        assert accepted.json()["expireAt"].endswith("Z")
+        wrong_path = {**payload, "path": "tenant/other/camera-1/sub"}
+        assert private_client.post("/api/v1/media/mediamtx/auth", json=wrong_path).status_code == 401
+        publish = {**payload, "action": "publish"}
+        assert private_client.post("/api/v1/media/mediamtx/auth", json=publish).status_code == 401
+    finally:
+        app.state.mediamtx_enabled = False
+        app.state.mediamtx_allowed_cidrs = []

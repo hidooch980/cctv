@@ -35,12 +35,12 @@ class MolidoCctvApp extends StatelessWidget {
 }
 
 class CameraItem {
-  CameraItem({required this.name, required this.brand, required this.host, required this.status, this.location = 'محل نصب ثبت نشده'});
+  CameraItem({required this.name, required this.brand, required this.host, required this.status, this.location = 'Not set'});
   final String name, brand, host, status, location;
   factory CameraItem.fromJson(Map<String, dynamic> j) => CameraItem(
     name: j['name'] ?? 'Camera', brand: j['brand'] ?? 'Generic',
     host: j['host'] ?? '', status: j['status'] ?? 'pending',
-    location: j['location'] ?? 'بدون موقعیت',
+    location: j['location'] ?? 'Not set',
   );
 }
 
@@ -62,17 +62,17 @@ class _DashboardPageState extends State<DashboardPage> {
   ];
 
   Future<void> syncCameras() async {
-    setState(() { connecting = true; connection = 'در حال اتصال…'; });
+    setState(() { connecting = true; connection = t('connecting'); });
     try {
       final res = await http.get(Uri.parse('$apiBase/api/v1/cameras')).timeout(const Duration(seconds: 6));
       if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
       final data = (jsonDecode(res.body) as List).map((e) => CameraItem.fromJson(e as Map<String, dynamic>)).toList();
       if (!mounted) return;
-      setState(() { cameras..clear()..addAll(data); connection = 'متصل به سرور'; });
+      setState(() { cameras..clear()..addAll(data); connection = t('connected'); });
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('updated'))));
     } catch (_) {
       if (!mounted) return;
-      setState(() => connection = 'سرور در دسترس نیست • حالت آزمایشی');
+      setState(() => connection = t('unavailable'));
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('failed'))));
     } finally { if (mounted) setState(() => connecting = false); }
   }
@@ -183,15 +183,15 @@ class _DashboardPageState extends State<DashboardPage> {
   ]));
 
   Widget _cameraList()=>ListView(padding:const EdgeInsets.all(16),children:[
-    Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[Text(t('manage'),style:TextStyle(fontSize:19,fontWeight:FontWeight.bold)),Text('${cameras.length} دستگاه',style:const TextStyle(color:Colors.white54))]),
+    Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[Text(t('manage'),style:TextStyle(fontSize:19,fontWeight:FontWeight.bold)),Text('${cameras.length} ${t('device')}',style:const TextStyle(color:Colors.white54))]),
     const SizedBox(height:12),
     ...cameras.map((c)=>Card(child:ListTile(leading:Container(width:42,height:42,decoration:BoxDecoration(color:brandRed.withOpacity(.13),borderRadius:BorderRadius.circular(12)),child:const Icon(Icons.videocam,color:brandRed)),title:Text(c.name),subtitle:Text('${c.brand}  •  ${c.host}\n${c.location}',style:const TextStyle(fontSize:11)),isThreeLine:true,trailing:const Icon(Icons.chevron_left)))),
-    const SizedBox(height:12),OutlinedButton.icon(onPressed:connecting?null:syncCameras,icon:const Icon(Icons.sync),label:Text(connecting?'در حال همگام‌سازی':'همگام‌سازی با سرور')),
+    const SizedBox(height:12),OutlinedButton.icon(onPressed:connecting?null:syncCameras,icon:const Icon(Icons.sync),label:Text(connecting?t('syncing'):t('syncServer'))),
   ]);
 
   Widget _events()=>ListView(padding:const EdgeInsets.all(16),children:[
     Text(t('eventTitle'),style:TextStyle(fontSize:19,fontWeight:FontWeight.bold)),const SizedBox(height:18),
-    Container(padding:const EdgeInsets.all(16),decoration:BoxDecoration(color:panel,borderRadius:BorderRadius.circular(16)),child:const Column(children:[Icon(Icons.notifications_none,size:42,color:Colors.white38),SizedBox(height:10),Text(t('empty'),style:TextStyle(color:Colors.white70)),SizedBox(height:5),Text(t('emptyHelp'),textAlign:TextAlign.center,style:TextStyle(color:Colors.white38,fontSize:12))])),
+    Container(padding:const EdgeInsets.all(16),decoration:BoxDecoration(color:panel,borderRadius:BorderRadius.circular(16)),child:Column(children:[Icon(Icons.notifications_none,size:42,color:Colors.white38),SizedBox(height:10),Text(t('empty'),style:TextStyle(color:Colors.white70)),SizedBox(height:5),Text(t('emptyHelp'),textAlign:TextAlign.center,style:TextStyle(color:Colors.white38,fontSize:12))])),
   ]);
 
   Widget _settings()=>ListView(padding:const EdgeInsets.all(16),children:[
@@ -199,7 +199,7 @@ class _DashboardPageState extends State<DashboardPage> {
     Card(child:ListTile(leading:const Icon(Icons.dns_outlined,color:brandRed),title:Text(t('server')),subtitle:Text(apiBase),trailing:const Icon(Icons.edit),onTap:editServer)),
     Card(child:ListTile(leading:const Icon(Icons.language,color:brandRed),title:Text(t('language')),trailing:DropdownButton<String>(value:language,items:const [DropdownMenuItem(value:'fa',child:Text('فارسی')),DropdownMenuItem(value:'en',child:Text('English')),DropdownMenuItem(value:'ar',child:Text('العربية')),DropdownMenuItem(value:'tr',child:Text('Türkçe'))],onChanged:(v){if(v!=null)setState(()=>language=v);}))),
     Card(child:ListTile(leading:const Icon(Icons.security,color:brandRed),title:Text(t('security')),subtitle:Text(t('credentialNote')))),
-    const Card(child:ListTile(leading:Icon(Icons.info_outline,color:brandRed),title:Text('Version'),subtitle:Text('0.1.0 • Android Test'))),
+    const Card(child:ListTile(leading:Icon(Icons.info_outline,color:brandRed),title:Text(t('version')),subtitle:Text('0.1.0 • Android Test'))),
     const SizedBox(height:10),FilledButton.icon(style:FilledButton.styleFrom(backgroundColor:brandRed),onPressed:syncCameras,icon:const Icon(Icons.link),label:Text(t('check'))),
   ]);
 }

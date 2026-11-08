@@ -413,7 +413,7 @@ def dahua_p2p_status(recorder_id: UUID) -> dict:
 
 
 @app.post("/api/v1/recorders/{recorder_id}/p2p-connect-test")
-def dahua_p2p_connect_test(recorder_id: UUID) -> dict:
+def dahua_p2p_connect_test(recorder_id: UUID, payload: RecorderConnectTest) -> dict:
     with db_connection() as db:
         recorder = db.execute(
             "SELECT connection_method FROM recorders WHERE id=?",
@@ -425,7 +425,7 @@ def dahua_p2p_connect_test(recorder_id: UUID) -> dict:
         raise HTTPException(status_code=409, detail="Recorder is not registered in Dahua P2P mode")
     raise HTTPException(
         status_code=501,
-        detail="An officially authorized Dahua third-party P2P SDK/API or partner adapter is not configured; DoLynk is a separate optional enterprise integration. No cloud connection was attempted.",
+        detail="An officially authorized Dahua DMSS-compatible third-party P2P SDK/API adapter is not configured. No cloud connection was attempted; submitted credentials were not persisted.",
     )
 
 

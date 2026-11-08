@@ -2,8 +2,8 @@
 
 Molido CCTV AI treats DVR, NVR and hybrid XVR appliances as first-class managed devices, alongside standalone IP cameras.
 
-## Connection methods (both supported in the product design)
-Molido must offer two selectable connection paths. The available path depends on the recorder brand, model, firmware and vendor-supported interfaces.
+## Connection methods
+The mobile user and recorder may be on completely different networks. Therefore, local IP discovery is not sufficient. The app must offer Local IP, Vendor P2P/Serial, Molido Gateway and optional Public IP modes. Availability depends on recorder model, firmware, network topology and authorized vendor interfaces. See [remote connectivity architecture](remote-connectivity-architecture.md) for the gateway and security design.
 
 ### A. Direct IP connection
 - Connect directly over the reachable LAN/WAN IP address or hostname and configured service port.
@@ -11,7 +11,7 @@ Molido must offer two selectable connection paths. The available path depends on
 - The recorder must be reachable from the Molido server/client and the account must have the required permissions.
 - Port defaults are model/protocol-specific and must remain editable.
 
-### B. Serial-number / device-ID connection
+### B. Serial-number / device-ID connection (vendor P2P/cloud)
 - Provide an optional serial-number entry path for manufacturers that support device binding or remote/P2P access by serial number.
 - Inputs may include serial number/device ID plus the vendor-required verification code, device password, account authorization or other pairing proof.
 - Serial number alone is not assumed to authenticate or establish a connection. Do not bypass vendor authentication.
@@ -19,7 +19,20 @@ Molido must offer two selectable connection paths. The available path depends on
 - QR scanning may be offered as a convenience to populate serial/device ID and pairing fields, but must not be mandatory.
 - Do not require the user to create a vendor cloud account unless the specific manufacturer's documented connection method requires it.
 
-The UI must let the operator choose **IP connection** or **Serial/Device ID connection** and show only the fields required by the selected supported adapter.
+### C. Molido outbound gateway (recommended for different networks)
+- Install a Molido gateway/agent on a computer or appliance that can reach the DVR/NVR on its local network.
+- The gateway establishes an outbound authenticated TLS session to Molido; no inbound port-forwarding is required on the recorder's router.
+- The mobile app communicates with Molido, which authorizes a short-lived session through the paired gateway.
+- The gateway performs the local Dahua CGI/ONVIF probe and returns sanitized channel/capability metadata.
+- Live video requires a separately authorized media relay/tunnel; the control connection alone does not carry video.
+- Gateway enrollment must be one-time, site-bound, revocable and protected by rotating credentials.
+
+### D. Public IP / DNS direct remote connection
+- Optional advanced path for an owner-managed, intentionally reachable recorder.
+- Prefer VPN or restrictive firewall allowlists; do not expose recorder administration ports openly to the internet.
+- Require TLS where supported and strong unique credentials. Validate destination and port to prevent SSRF and port scanning.
+
+The UI must let the operator choose **Local IP**, **Vendor P2P/Serial**, **Molido Gateway** or **Public IP** and show only fields required by the selected supported adapter.
 
 ## Device inventory
 - Device type: DVR, NVR or XVR.
@@ -48,7 +61,8 @@ The UI must let the operator choose **IP connection** or **Serial/Device ID conn
 - **Hikvision:** ISAPI device information and supported input/stream channel endpoints; falls back to ONVIF when the ISAPI path is unavailable.
 - **Dahua:** CGI system information and channel-title enumeration; ONVIF remains the fallback for media profiles and RTSP stream URIs.
 - **Uniview, Tiandy and other ONVIF-capable brands:** generic ONVIF adapter path. A dedicated vendor API adapter is not yet certified for these brands.
-- **Serial/P2P:** the inventory accepts serial/device IDs, but live serial/P2P authentication is not enabled until the relevant manufacturer's SDK, authorization material and terms are available.
+- **Serial/P2P:** the inventory accepts serial/device IDs, but live Dahua P2P authentication is not enabled until the relevant manufacturer's SDK, authorization material and terms are available.
+- **Molido Gateway / remote relay:** architecture is documented; gateway enrollment, outbound tunnel and media relay are not implemented yet.
 
 The connection-test endpoint is \`POST /api/v1/recorders/{id}/connect-test\`; it accepts credentials for that single request, performs an authenticated probe, and does not persist the submitted username/password. Discovered channels are listed at \`GET /api/v1/recorders/{id}/channels\`.
 
@@ -75,4 +89,4 @@ ONVIF discovery/profile/media support, RTSP live streaming, and vendor-specific 
 - Submitted passwords and pairing codes are request-only fields; the recorder inventory database and API responses do not persist or expose them.
 - Registration currently records device configuration with `pending` status. It does not yet establish a live vendor session.
 - ONVIF, Hikvision ISAPI and Dahua CGI adapter code plus mock-transport tests are present. Mock tests do not prove compatibility with physical recorders.
-- Physical-device connectivity, firmware-specific channel discovery, stream decoding, manufacturer P2P/SDK authentication, recorded playback and disk telemetry still require authorized hardware/firmware tests.
+- Physical-device connectivity, firmware-specific channel discovery, stream decoding, manufacturer P2P/SDK authentication, Molido gateway enrollment/tunnel, remote media relay, recorded playback and disk telemetry still require implementation and/or authorized hardware/firmware tests.

@@ -9,8 +9,10 @@ from typing import Iterator
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI, HTTPException, status
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.adapters import registry
 
 
 class Settings(BaseSettings):
@@ -114,6 +116,21 @@ class RecorderCreate(BaseModel):
         return self
 
 
+class RecorderConnectTest(BaseModel):
+    username: str = Field(min_length=1, max_length=128)
+    password: SecretStr
+
+
+class RecorderChannelRead(BaseModel):
+    id: UUID
+    recorder_id: UUID
+    channel_number: int
+    name: str
+    profile_token: str | None
+    stream_uri: str | None
+    status: str
+
+
 class RecorderRead(BaseModel):
     id: UUID
     name: str
@@ -174,6 +191,16 @@ def init_database() -> None:
             )
         """)
         db.execute("CREATE INDEX IF NOT EXISTS idx_recorders_host ON recorders(host)")
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS recorder_channels (
+                id TEXT PRIMARY KEY, recorder_id TEXT NOT NULL,
+                channel_number INTEGER NOT NULL, name TEXT NOT NULL,
+                profile_token TEXT, stream_uri TEXT, status TEXT NOT NULL DEFAULT 'discovered',
+                UNIQUE(recorder_id, channel_number),
+                FOREIGN KEY(recorder_id) REFERENCES recorders(id) ON DELETE CASCADE
+            )
+        """)
+        db.execute("CREATE INDEX IF NOT EXISTS idx_recorder_channels_recorder ON recorder_channels(recorder_id)")
 
 
 def row_to_camera(row: sqlite3.Row) -> CameraRead:
@@ -304,3 +331,69 @@ def delete_recorder(recorder_id: UUID) -> None:
         cursor = db.execute("DELETE FROM recorders WHERE id=?", (str(recorder_id),))
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Recorder not found")
+
+
+
+@app.post("/api/v1/recorders/{recorder_id}/connect-test")
+async def test_recorder_connection(recorder_id: UUID, credentials: RecorderConnectTest) -> dict:
+    with db_connection() as db:
+        recorder = db.execute(
+            "SELECT id,brand,connection_method,host,port FROM recorders WHERE id=?",
+            (str(recorder_id),),
+        ).fetchone()
+    if recorder is None:
+        raise HTTPException(status_code=404, detail="Recorder not found")
+    if recorder["connection_method"] != "ip" or not recorder["host"]:
+        raise HTTPException(
+            status_code=501,
+            detail="Serial/P2P connection requires the manufacturer's authorized SDK or cloud/P2P credentials; this adapter is not configured.",
+        )
+    result = await registry.discover(
+        host=recorder["host"], port=recorder["port"], brand=recorder["brand"],
+        username=credentials.username, password=credentials.password.get_secret_value(),
+    )
+    with db_connection() as db:
+        db.execute("DELETE FROM recorder_channels WHERE recorder_id=?", (str(recorder_id),))
+        for channel in result.channels:
+            db.execute(
+                """INSERT INTO recorder_channels
+                   (id,recorder_id,channel_number,name,profile_token,stream_uri,status)
+                   VALUES (?,?,?,?,?,?,?)""",
+                (str(uuid4()), str(recorder_id), channel["channel_number"], channel["name"],
+                 channel.get("profile_token"), channel.get("stream_uri"), channel.get("status", "discovered")),
+            )
+        db.execute(
+            "UPDATE recorders SET status=? WHERE id=?",
+            ("online" if result.reachable else "offline", str(recorder_id)),
+        )
+    return {
+        "reachable": result.reachable,
+        "adapter": result.adapter,
+        "manufacturer": result.manufacturer,
+        "model": result.model,
+        "channel_count": len(result.channels),
+        "channels": [{k: v for k, v in channel.items() if k != "stream_uri"} for channel in result.channels],
+        "capabilities": result.capabilities,
+        "warnings": result.warnings,
+        "credentials_persisted": False,
+    }
+
+
+@app.get("/api/v1/recorders/{recorder_id}/channels", response_model=list[RecorderChannelRead])
+def list_recorder_channels(recorder_id: UUID) -> list[RecorderChannelRead]:
+    with db_connection() as db:
+        exists = db.execute("SELECT 1 FROM recorders WHERE id=?", (str(recorder_id),)).fetchone()
+        if exists is None:
+            raise HTTPException(status_code=404, detail="Recorder not found")
+        rows = db.execute(
+            "SELECT id,recorder_id,channel_number,name,profile_token,stream_uri,status FROM recorder_channels WHERE recorder_id=? ORDER BY channel_number",
+            (str(recorder_id),),
+        ).fetchall()
+    return [
+        RecorderChannelRead(
+            id=UUID(row["id"]), recorder_id=UUID(row["recorder_id"]),
+            channel_number=row["channel_number"], name=row["name"],
+            profile_token=row["profile_token"], stream_uri=row["stream_uri"], status=row["status"],
+        )
+        for row in rows
+    ]

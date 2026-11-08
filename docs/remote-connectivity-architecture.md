@@ -35,13 +35,14 @@ A Molido mobile user and a Dahua (or other supported) DVR/NVR may be on complete
 - Do not expose raw RTSP credentials or unrestricted RTSP URLs to the mobile client. Use a short-lived authorized media session.
 - Do not claim end-to-end encrypted video unless every relay and key-management stage actually provides it.
 
-## Dahua P2P / serial-number path
+## Dahua official P2P / serial-number path (primary)
 
-- Implement only against a documented, authorized Dahua SDK/API and its licensing/terms.
-- Determine exact model, firmware, region and P2P/cloud availability before enabling the adapter.
+- The recorder must have P2P enabled and report **Online** while connected to the internet.
+- Add the recorder using its Dahua serial number (or supported QR code), device username/password, and any vendor account authorization required by the selected Dahua P2P/PaaS mode.
 - Serial number alone never authenticates a device.
-- If the official SDK/API is unavailable, show the device as “P2P not configured” and offer Molido Gateway or secure public/VPN reachability where suitable.
-- Do not reverse-engineer private cloud protocols or bypass vendor authentication.
+- Integrate only through a documented, authorized Dahua SDK/API and its licensing/terms. Do not reverse-engineer private cloud protocols or bypass vendor authentication.
+- Determine exact model, firmware, region and supported P2P/PaaS mode before enabling the adapter.
+- If official integration access is unavailable, clearly mark P2P as not configured; offer the optional Molido Gateway or secure VPN/public-IP path.
 
 ## Implementation stages
 
@@ -53,4 +54,4 @@ A Molido mobile user and a Dahua (or other supported) DVR/NVR may be on complete
 
 ## Current status (truthful)
 
-The existing backend has local/direct-IP adapter probes for Dahua CGI, Hikvision ISAPI and generic ONVIF, plus simulated tests. The serial/device-ID path currently stores inventory identity only; it does not establish a vendor P2P session. No Molido gateway enrollment service, outbound tunnel, cloud relay or remote video relay is implemented yet. A physical recorder and a gateway on its LAN are required to validate the complete remote path.
+The existing backend has local/direct-IP adapter probes for Dahua CGI, Hikvision ISAPI and generic ONVIF, plus simulated tests. The serial/device-ID path currently stores inventory identity only; it does not establish a Dahua official P2P/PaaS session. No Dahua SDK/API integration, Molido gateway enrollment service, outbound tunnel, cloud relay or remote video relay is implemented yet. A physical recorder and a gateway on its LAN are required to validate the complete remote path.

@@ -7,7 +7,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app, init_database
+from app.main import app, init_database, tenant_database_path
+from app.auth import bootstrap_admin, init_auth_schema, login
 from app.adapters import AdapterResult
 import app.main as main_module
 
@@ -16,8 +17,21 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def isolated_database(tmp_path, monkeypatch):
-    monkeypatch.setattr(app.state, "database_path", str(tmp_path / "cameras.sqlite3"))
+    path = str(tmp_path / "auth.sqlite3")
+    monkeypatch.setattr(app.state, "database_path", path)
+    monkeypatch.setattr(app.state, "auth_database_path", path)
     init_database()
+    init_auth_schema(path)
+    tenant_id = bootstrap_admin(
+        path, configured_secret="test-bootstrap-secret",
+        supplied_secret="test-bootstrap-secret", email="admin@example.test",
+        password="test manager password long", tenant_name="Test Site",
+        tenant_slug="test-site",
+    )
+    token, _ = login(path, email="admin@example.test",
+                     password="test manager password long", tenant_slug="test-site")
+    app.state.test_tenant_id = tenant_id
+    client.headers.update({"Authorization": f"Bearer {token}"})
 
 
 def test_health_endpoint() -> None:
@@ -101,7 +115,7 @@ def test_create_ip_recorder_without_persisting_credentials():
     assert body["connection_method"] == "ip"
     assert body["host"] == "192.0.2.50"
     assert "username" not in body and "password" not in body
-    with sqlite3.connect(app.state.database_path) as db:
+    with sqlite3.connect(tenant_database_path(app.state.test_tenant_id)) as db:
         stored = " ".join(str(x) for x in db.execute("SELECT * FROM recorders").fetchone())
     assert "secret-not-to-store" not in stored
     assert "operator" not in stored
@@ -202,7 +216,7 @@ def test_dahua_p2p_registration_and_readiness_are_explicit():
     assert state["sdk_connected"] is False
     assert state["cloud_video"] is False
     assert state["credentials_persisted"] is False
-    with main_module.db_connection() as db:
+    with sqlite3.connect(tenant_database_path(app.state.test_tenant_id)) as db:
         stored = " ".join(str(value) for value in db.execute("SELECT * FROM recorders WHERE id=?", (body["id"],)).fetchone())
     assert "operator" not in stored and "p2p-pass" not in stored
 

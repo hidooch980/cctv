@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() { WidgetsFlutterBinding.ensureInitialized(); runApp(const MolidoCctvApp()); }
 
@@ -181,6 +182,46 @@ class _DashboardPageState extends State<DashboardPage> {
   void initState() {
     super.initState();
     apiBase = widget.initialApiBase;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkForAppUpdate());
+  }
+  static const String _installedVersion = '0.1.0';
+  Future<void> _checkForAppUpdate({bool manual = false}) async {
+    try {
+      final response = await http.get(Uri.parse('https://api.github.com/repos/hidooch980/cctv/releases/latest'),
+        headers: {'Accept': 'application/vnd.github+json'}).timeout(const Duration(seconds: 12));
+      if (response.statusCode != 200) throw Exception('Release feed unavailable');
+      final release = jsonDecode(response.body) as Map<String, dynamic>;
+      final tag = (release['tag_name'] ?? '').toString().replaceFirst(RegExp(r'^[vV]'), '');
+      int compare(String a, String b) {
+        final aa = a.split('.').map((x) => int.tryParse(x) ?? 0).toList();
+        final bb = b.split('.').map((x) => int.tryParse(x) ?? 0).toList();
+        for (var i = 0; i < (aa.length > bb.length ? aa.length : bb.length); i++) {
+          final av = i < aa.length ? aa[i] : 0;
+          final bv = i < bb.length ? bb[i] : 0;
+          if (av != bv) return av.compareTo(bv);
+        }
+        return 0;
+      }
+      if (tag.isEmpty || compare(tag, _installedVersion) <= 0) {
+        if (manual && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(language == 'fa' ? 'برنامه به‌روز است.' : 'App is up to date.')));
+        return;
+      }
+      final assets = (release['assets'] as List<dynamic>? ?? []);
+      final apk = assets.cast<Map<String, dynamic>?>().where((a) => a != null && (a['name'] ?? '').toString().endsWith('.apk')).firstOrNull;
+      final url = (apk?['browser_download_url'] ?? release['html_url'] ?? '').toString();
+      if (!mounted || url.isEmpty) return;
+      showDialog<void>(context: context, builder: (ctx) => AlertDialog(
+        backgroundColor: panel,
+        title: Text(language == 'fa' ? 'نسخهٔ جدید موجود است' : language == 'ar' ? 'يتوفر تحديث جديد' : language == 'tr' ? 'Yeni sürüm mevcut' : 'Update available'),
+        content: Text(language == 'fa' ? 'نسخهٔ $tag منتشر شده است. برای دریافت APK امضاشده صفحهٔ انتشار باز می‌شود.' : 'Version $tag is available. Open the release page to get the signed APK.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(language == 'fa' ? 'بعداً' : 'Later')),
+          FilledButton(onPressed: () { Navigator.pop(ctx); launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication); }, child: Text(language == 'fa' ? 'دریافت به‌روزرسانی' : 'Get update')),
+        ],
+      ));
+    } catch (_) {
+      if (manual && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(language == 'fa' ? 'بررسی به‌روزرسانی انجام نشد.' : 'Could not check for updates.')));
+    }
   }
   bool connecting = false;
   String connection = 'Local demo mode';
@@ -551,7 +592,8 @@ class _DashboardPageState extends State<DashboardPage> {
     Card(child:ListTile(leading:const Icon(Icons.dns_outlined,color:brandRed),title:Text(t('server')),subtitle:Text(apiBase))),
     Card(child:ListTile(leading:const Icon(Icons.language,color:brandRed),title:Text(t('language')),trailing:DropdownButton<String>(value:language,items:const [DropdownMenuItem(value:'fa',child:Text('فارسی')),DropdownMenuItem(value:'en',child:Text('English')),DropdownMenuItem(value:'ar',child:Text('العربية')),DropdownMenuItem(value:'tr',child:Text('Türkçe'))],onChanged:(v){if(v!=null)setState(()=>language=v);}))),
     Card(child:ListTile(leading:const Icon(Icons.security,color:brandRed),title:Text(t('security')),subtitle:Text(t('credentialNote')))),
-    Card(child:ListTile(leading:const Icon(Icons.info_outline,color:brandRed),title:Text(t('version')),subtitle:const Text('0.1.0 • Android Test'))),
+    Card(child:ListTile(leading:const Icon(Icons.info_outline,color:brandRed),title:Text(t('version')),subtitle:const Text('0.1.0 • Android'))),
+    Card(child:ListTile(leading:const Icon(Icons.system_update_alt,color:brandRed),title:Text(language=='fa'?'به‌روزرسانی خودکار':'Automatic updates'),subtitle:Text(language=='fa'?'بررسی نسخهٔ جدید هنگام اجرای برنامه':'Checks GitHub Releases when the app starts'),trailing:const Icon(Icons.chevron_right),onTap:()=>_checkForAppUpdate(manual:true))),
     const SizedBox(height:10),FilledButton.icon(style:FilledButton.styleFrom(backgroundColor:brandRed),onPressed:syncCameras,icon:const Icon(Icons.link),label:Text(t('check'))),
     if(widget.role == 'manager') ...[
       const SizedBox(height:10),OutlinedButton.icon(onPressed:createUser,icon:const Icon(Icons.person_add_alt_1),label:Text(language=='fa'?'ایجاد حساب مدیر / کارمند / مشاهده‌گر':'Create manager / employee / viewer account')),

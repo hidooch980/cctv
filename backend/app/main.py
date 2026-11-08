@@ -2,17 +2,20 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from contextvars import ContextVar
 from contextlib import contextmanager
 from enum import Enum
 from pathlib import Path
 from typing import Iterator
 from uuid import UUID, uuid4
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.adapters import registry
+from app.auth import AuthError, init_auth_schema, resolve_principal, router as auth_router
 from app.streaming import StreamProfile, StreamTransport
 
 
@@ -24,7 +27,10 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-app = FastAPI(title=settings.app_name, version="0.2.0", docs_url="/api/docs")
+app = FastAPI(title=settings.app_name, version="0.3.0", docs_url="/api/docs")
+_tenant_database: ContextVar[str | None] = ContextVar("tenant_database", default=None)
+app.state.auth_database_path = os.getenv("MOLIDO_CCTV_AUTH_DATABASE_PATH", settings.database_path)
+app.state.bootstrap_secret = os.getenv("MOLIDO_CCTV_BOOTSTRAP_SECRET")
 
 
 class CameraProtocol(str, Enum):
@@ -153,7 +159,8 @@ class RecorderRead(BaseModel):
 
 
 def database_path() -> Path:
-    configured = Path(app.state.database_path)
+    tenant_path = _tenant_database.get()
+    configured = Path(tenant_path or app.state.database_path)
     configured.parent.mkdir(parents=True, exist_ok=True)
     return configured
 
@@ -221,6 +228,50 @@ def row_to_camera(row: sqlite3.Row) -> CameraRead:
 
 app.state.database_path = os.getenv("MOLIDO_CCTV_DATABASE_PATH", settings.database_path)
 init_database()
+init_auth_schema(app.state.auth_database_path)
+app.include_router(auth_router)
+
+
+def tenant_database_path(tenant_id: str) -> str:
+    root = Path(app.state.database_path).parent / "tenants"
+    return str(root / tenant_id / "cameras.sqlite3")
+
+
+@app.middleware("http")
+async def authenticate_and_isolate_tenant(request: Request, call_next):
+    path = request.url.path
+    public_paths = {"/api/health", "/api/v1/auth/bootstrap", "/api/v1/auth/login"}
+    if path in public_paths or not path.startswith("/api/v1/"):
+        return await call_next(request)
+
+    authorization = request.headers.get("authorization", "")
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        return JSONResponse(status_code=401, content={"detail": "authentication_required"})
+    try:
+        principal = resolve_principal(
+            app.state.auth_database_path, token,
+            tenant_id=request.headers.get("x-tenant-id"),
+        )
+    except AuthError:
+        return JSONResponse(status_code=401, content={"detail": "invalid_or_expired_session"})
+
+    if path == "/api/v1/auth/logout":
+        pass
+    elif path == "/api/v1/auth/users":
+        if not principal.allows("user:manage"):
+            return JSONResponse(status_code=403, content={"detail": "forbidden"})
+    elif principal.role == "viewer" and request.method not in {"GET", "HEAD", "OPTIONS"}:
+        return JSONResponse(status_code=403, content={"detail": "read_only_role"})
+
+    request.state.principal = principal
+    request.state.bearer_token = token
+    context_token = _tenant_database.set(tenant_database_path(principal.tenant_id))
+    try:
+        init_database()
+        return await call_next(request)
+    finally:
+        _tenant_database.reset(context_token)
 
 
 @app.get("/api/health")

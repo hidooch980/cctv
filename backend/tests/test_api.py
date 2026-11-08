@@ -188,11 +188,12 @@ def test_dahua_p2p_registration_and_readiness_are_explicit():
     created = client.post("/api/v1/recorders", json={
         "name": "Remote Dahua NVR", "brand": "Dahua", "recorder_type": "nvr",
         "connection_method": "dahua_p2p", "serial_number": "DH-SERIAL-2026",
-        "username": "operator",
+        "username": "operator", "password": "p2p-pass",
     })
     assert created.status_code == 201
     body = created.json()
     assert body["connection_method"] == "dahua_p2p"
+    assert "username" not in body and "password" not in body
     status_response = client.get(f"/api/v1/recorders/{body['id']}/p2p-status")
     assert status_response.status_code == 200
     state = status_response.json()
@@ -201,13 +202,17 @@ def test_dahua_p2p_registration_and_readiness_are_explicit():
     assert state["online"] is False
     assert state["sdk_connected"] is False
     assert state["cloud_video"] is False
+    assert state["credentials_persisted"] is False
+    with db_connection() as db:
+        stored = " ".join(str(value) for value in db.execute("SELECT * FROM recorders WHERE id=?", (body["id"],)).fetchone())
+    assert "operator" not in stored and "p2p-pass" not in stored
 
 
 def test_dahua_p2p_rejects_other_brands():
     response = client.post("/api/v1/recorders", json={
         "name": "Remote NVR", "brand": "Hikvision", "recorder_type": "nvr",
         "connection_method": "dahua_p2p", "serial_number": "SN123456",
-        "username": "operator",
+        "username": "operator", "password": "p2p-pass",
     })
     assert response.status_code == 422
 
@@ -216,8 +221,11 @@ def test_dahua_p2p_connect_test_is_not_faked():
     created = client.post("/api/v1/recorders", json={
         "name": "Remote Dahua NVR", "brand": "Dahua", "recorder_type": "nvr",
         "connection_method": "dahua_p2p", "serial_number": "DH-SERIAL-2026",
-        "username": "operator",
+        "username": "operator", "password": "p2p-pass",
     })
-    response = client.post(f"/api/v1/recorders/{created.json()['id']}/p2p-connect-test")
+    response = client.post(
+        f"/api/v1/recorders/{created.json()['id']}/p2p-connect-test",
+        json={"username": "operator", "password": "p2p-pass"},
+    )
     assert response.status_code == 501
-    assert "DoLynk Developer" in response.json()["detail"]
+    assert "DMSS-compatible" in response.json()["detail"]

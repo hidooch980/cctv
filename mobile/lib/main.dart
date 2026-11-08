@@ -54,7 +54,10 @@ class _DashboardPageState extends State<DashboardPage> {
   String apiBase = 'http://10.0.2.2:8000';
   bool connecting = false;
   String connection = 'Local demo mode';
-  int selectedTab = 0;\n  String language = 'fa';\n  String t(String key) => tr(language, key);\n  TextDirection get pageDirection => language == 'fa' || language == 'ar' ? TextDirection.rtl : TextDirection.ltr;
+  int selectedTab = 0;
+  String language = 'fa';
+  String t(String key) => tr(language, key);
+  TextDirection get pageDirection => language == 'fa' || language == 'ar' ? TextDirection.rtl : TextDirection.ltr;
   final cameras = <CameraItem>[
     CameraItem(name: 'ورودی اصلی', brand: 'Dahua', host: '192.168.1.101', status: 'demo'),
     CameraItem(name: 'پارکینگ', brand: 'Dahua', host: '192.168.1.102', status: 'demo'),
@@ -136,9 +139,9 @@ class _DashboardPageState extends State<DashboardPage> {
         onPressed:addCamera, backgroundColor:brandRed, child:const Icon(Icons.add)
       ) : null,
       bottomNavigationBar: NavigationBar(
-        backgroundColor:panel, indicatorColor:brandRed.withOpacity(.2),
+        backgroundColor:panel, indicatorColor:brandRed.withValues(alpha:.2),
         selectedIndex:selectedTab, onDestinationSelected:(i)=>setState(()=>selectedTab=i),
-        destinations:const [
+        destinations:[
           NavigationDestination(icon:Icon(Icons.dashboard_outlined),selectedIcon:Icon(Icons.dashboard),label:t('home')),
           NavigationDestination(icon:Icon(Icons.cameraswitch_outlined),selectedIcon:Icon(Icons.cameraswitch),label:t('cameras')),
           NavigationDestination(icon:Icon(Icons.notifications_active_outlined),selectedIcon:Icon(Icons.notifications_active),label:t('events')),
@@ -175,7 +178,7 @@ class _DashboardPageState extends State<DashboardPage> {
       child:Row(children:[Icon(Icons.info_outline,color:brandRed),SizedBox(width:10),Expanded(child:Text(t('demo'),style:TextStyle(fontSize:12,color:Colors.white70)))])),
   ]);
 
-  Widget _metric(String label,String value,IconData icon)=>Expanded(child:Container(padding:const EdgeInsets.all(10),decoration:BoxDecoration(color:Colors.white.withOpacity(.05),borderRadius:BorderRadius.circular(14)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Icon(icon,color:brandRed,size:19),const SizedBox(height:8),Text(value,style:const TextStyle(fontSize:21,fontWeight:FontWeight.bold)),Text(label,style:const TextStyle(fontSize:10,color:Colors.white60))])));
+  Widget _metric(String label,String value,IconData icon)=>Expanded(child:Container(padding:const EdgeInsets.all(10),decoration:BoxDecoration(color:Colors.white.withValues(alpha:.05),borderRadius:BorderRadius.circular(14)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Icon(icon,color:brandRed,size:19),const SizedBox(height:8),Text(value,style:const TextStyle(fontSize:21,fontWeight:FontWeight.bold)),Text(label,style:const TextStyle(fontSize:10,color:Colors.white60))])));
   Widget _statusDot()=>Row(children:[Container(width:8,height:8,decoration:const BoxDecoration(color:Color(0xFFFFB74D),shape:BoxShape.circle)),const SizedBox(width:6),const Text('TEST',style:TextStyle(color:Color(0xFFFFB74D),fontSize:10,fontWeight:FontWeight.bold))]);
   Widget _previewCard(CameraItem c)=>Container(decoration:BoxDecoration(color:panel,borderRadius:BorderRadius.circular(16),border:Border.all(color:Colors.white10)),clipBehavior:Clip.antiAlias,child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
     Expanded(child:Container(color:const Color(0xFF252A32),child:const Center(child:Icon(Icons.videocam_off_outlined,size:34,color:Colors.white24)))),
@@ -185,7 +188,7 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget _cameraList()=>ListView(padding:const EdgeInsets.all(16),children:[
     Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[Text(t('manage'),style:TextStyle(fontSize:19,fontWeight:FontWeight.bold)),Text('${cameras.length} ${t('device')}',style:const TextStyle(color:Colors.white54))]),
     const SizedBox(height:12),
-    ...cameras.map((c)=>Card(child:ListTile(leading:Container(width:42,height:42,decoration:BoxDecoration(color:brandRed.withOpacity(.13),borderRadius:BorderRadius.circular(12)),child:const Icon(Icons.videocam,color:brandRed)),title:Text(c.name),subtitle:Text('${c.brand}  •  ${c.host}\n${c.location}',style:const TextStyle(fontSize:11)),isThreeLine:true,trailing:const Icon(Icons.chevron_left)))),
+    ...cameras.map((c)=>Card(child:ListTile(leading:Container(width:42,height:42,decoration:BoxDecoration(color:brandRed.withValues(alpha:.13),borderRadius:BorderRadius.circular(12)),child:const Icon(Icons.videocam,color:brandRed)),title:Text(c.name),subtitle:Text('${c.brand}  •  ${c.host}\n${c.location}',style:const TextStyle(fontSize:11)),isThreeLine:true,trailing:const Icon(Icons.chevron_left)))),
     const SizedBox(height:12),OutlinedButton.icon(onPressed:connecting?null:syncCameras,icon:const Icon(Icons.sync),label:Text(connecting?t('syncing'):t('syncServer'))),
   ]);
 

@@ -188,7 +188,6 @@ def test_dahua_p2p_registration_and_readiness_are_explicit():
     created = client.post("/api/v1/recorders", json={
         "name": "Remote Dahua NVR", "brand": "Dahua", "recorder_type": "nvr",
         "connection_method": "dahua_p2p", "serial_number": "DH-SERIAL-2026",
-        "username": "operator", "password": "p2p-pass",
     })
     assert created.status_code == 201
     body = created.json()
@@ -221,7 +220,6 @@ def test_dahua_p2p_connect_test_is_not_faked():
     created = client.post("/api/v1/recorders", json={
         "name": "Remote Dahua NVR", "brand": "Dahua", "recorder_type": "nvr",
         "connection_method": "dahua_p2p", "serial_number": "DH-SERIAL-2026",
-        "username": "operator", "password": "p2p-pass",
     })
     response = client.post(
         f"/api/v1/recorders/{created.json()['id']}/p2p-connect-test",

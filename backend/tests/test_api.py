@@ -8,6 +8,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app, init_database
+from app.adapters import AdapterResult
+import app.main as main_module
 
 client = TestClient(app)
 
@@ -125,3 +127,58 @@ def test_ip_recorder_requires_ip_login_fields():
         "connection_method": "ip", "host": "192.0.2.51",
     }
     assert client.post("/api/v1/recorders", json=payload).status_code == 422
+
+
+
+def test_connection_test_discovers_and_persists_channels_without_credentials(monkeypatch):
+    created = client.post("/api/v1/recorders", json={
+        "name": "DVR test", "brand": "Generic", "recorder_type": "dvr",
+        "connection_method": "ip", "host": "192.0.2.60", "port": 80,
+        "username": "operator", "password": "transient-secret",
+    })
+    assert created.status_code == 201
+    recorder_id = created.json()["id"]
+
+    async def fake_discover(**kwargs):
+        assert kwargs["username"] == "operator"
+        assert kwargs["password"] == "transient-secret"
+        return AdapterResult(
+            reachable=True, adapter="onvif", manufacturer="TestVendor", model="TestDVR",
+            channels=[{
+                "channel_number": 1, "name": "Front Door", "profile_token": "p1",
+                "stream_uri": "rtsp://192.0.2.60:554/live/1", "status": "discovered",
+            }],
+            capabilities=["onvif", "profiles", "rtsp_uri"], warnings=[],
+        )
+
+    monkeypatch.setattr(main_module.registry, "discover", fake_discover)
+    tested = client.post(
+        f"/api/v1/recorders/{recorder_id}/connect-test",
+        json={"username": "operator", "password": "transient-secret"},
+    )
+    assert tested.status_code == 200
+    assert tested.json()["reachable"] is True
+    assert tested.json()["channel_count"] == 1
+    assert tested.json()["credentials_persisted"] is False
+    assert "stream_uri" not in tested.json()["channels"][0]
+    channels = client.get(f"/api/v1/recorders/{recorder_id}/channels")
+    assert channels.status_code == 200
+    assert channels.json()[0]["name"] == "Front Door"
+    assert "transient-secret" not in channels.text
+    with sqlite3.connect(app.state.database_path) as db:
+        stored = " ".join(str(value) for row in db.execute("SELECT * FROM recorder_channels") for value in row)
+    assert "transient-secret" not in stored
+
+
+def test_serial_connection_test_is_explicitly_not_supported_without_vendor_sdk():
+    created = client.post("/api/v1/recorders", json={
+        "name": "Serial NVR", "brand": "Generic", "recorder_type": "nvr",
+        "connection_method": "serial", "serial_number": "SERIAL-123",
+        "pairing_code": "temporary-code",
+    })
+    assert created.status_code == 201
+    response = client.post(
+        f"/api/v1/recorders/{created.json()['id']}/connect-test",
+        json={"username": "operator", "password": "secret"},
+    )
+    assert response.status_code == 501

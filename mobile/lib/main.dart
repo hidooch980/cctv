@@ -225,8 +225,8 @@ class _DashboardPageState extends State<DashboardPage> {
           'host':method=='ip'?host.text.trim():null,
           'port':method=='ip'?int.tryParse(port.text.trim()):null,
           'serial_number':method!='ip'?serial.text.trim():null,
-          'username':username.text.trim().isEmpty?null:username.text.trim(),
-          'password':(method=='ip'||method=='dahua_p2p')?password.text:null,
+          'username':method=='ip'?(username.text.trim().isEmpty?null:username.text.trim()):null,
+          'password':method=='ip'?password.text:null,
         };
         if(method=='dahua_p2p' && Uri.parse(apiBase).scheme!='https') {
           throw Exception('P2P credentials require HTTPS');

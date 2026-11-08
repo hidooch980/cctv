@@ -118,7 +118,7 @@ class _AuthGateState extends State<AuthGate> {
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Scaffold(backgroundColor: ink, body: Center(child:CircularProgressIndicator()));
-    if (_token != null) return DashboardPage(token:_token!, initialApiBase:_server.text, onLogout:_signOut);
+    if (_token != null) return DashboardPage(token:_token!, role:_role, initialApiBase:_server.text, onLogout:_signOut);
     final rtl = _language == 'fa' || _language == 'ar';
     return Directionality(textDirection:rtl?TextDirection.rtl:TextDirection.ltr, child:Scaffold(
       backgroundColor:ink, body:SafeArea(child:Center(child:SingleChildScrollView(

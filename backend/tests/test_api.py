@@ -198,12 +198,12 @@ def test_dahua_p2p_registration_and_readiness_are_explicit():
     assert status_response.status_code == 200
     state = status_response.json()
     assert state["connection_mode"] == "official_p2p_cloud"
-    assert state["integration_state"] == "credentials_required"
+    assert state["integration_state"] == "not_configured"
     assert state["online"] is False
     assert state["sdk_connected"] is False
     assert state["cloud_video"] is False
     assert state["credentials_persisted"] is False
-    with db_connection() as db:
+    with main_module.db_connection() as db:
         stored = " ".join(str(value) for value in db.execute("SELECT * FROM recorders WHERE id=?", (body["id"],)).fetchone())
     assert "operator" not in stored and "p2p-pass" not in stored
 

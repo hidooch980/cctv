@@ -42,7 +42,7 @@ class AuthGate extends StatefulWidget {
   State<AuthGate> createState() => _AuthGateState();
 }
 class _AuthGateState extends State<AuthGate> {
-  static const _storage = FlutterSecureStorage();
+  static final _storage = FlutterSecureStorage();
   final _server = TextEditingController(text: 'http://10.0.2.2:8000');
   final _tenant = TextEditingController();
   final _email = TextEditingController();

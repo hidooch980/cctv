@@ -254,6 +254,59 @@ def test_streaming_capabilities_report_provider_disabled():
     assert body["transports"] == []
 
 
+def test_playback_token_issuance_is_disabled_by_default_and_path_scoped_when_enabled():
+    from uuid import uuid4
+    from app.auth import verify_media_token
+
+    created = client.post("/api/v1/recorders", json={
+        "name": "Local NVR", "brand": "Generic", "recorder_type": "nvr",
+        "connection_method": "ip", "host": "192.0.2.26",
+        "username": "operator", "password": "not-persisted",
+    })
+    assert created.status_code == 201
+    recorder_id = created.json()["id"]
+    channel_id = uuid4()
+    with sqlite3.connect(tenant_database_path(app.state.test_tenant_id)) as db:
+        db.execute(
+            """INSERT INTO recorder_channels
+               (id,recorder_id,channel_number,name,profile_token,stream_uri,status)
+               VALUES (?,?,?,?,?,?,?)""",
+            (str(channel_id), recorder_id, 1, "Side gate", "profile-1",
+             "rtsp://192.0.2.26:554/live/1", "discovered"),
+        )
+
+    url = f"/api/v1/recorders/{recorder_id}/channels/{channel_id}/playback-token"
+    payload = {"transport": "webrtc", "profile": "sub", "session_ttl_seconds": 300}
+    denied = client.post(url, json=payload)
+    assert denied.status_code == 503
+
+    app.state.mediamtx_enabled = True
+    app.state.mediamtx_playback_enabled = True
+    app.state.mediamtx_allowed_cidrs = ["127.0.0.1/32"]
+    try:
+        issued = client.post(url, json=payload)
+        assert issued.status_code == 200
+        body = issued.json()
+        assert body["media_path"] == (
+            f"tenant/{app.state.test_tenant_id}/recorder/{recorder_id}/channel/{channel_id}/sub"
+        )
+        assert body["playback_url"] is None
+        assert body["gateway_configured"] is True
+        expiry = verify_media_token(
+            app.state.auth_database_path, token=body["token"],
+            media_path=body["media_path"], action="read", protocol="webrtc",
+        )
+        assert expiry > 0
+        assert client.post(url, json={**payload, "profile": "main"}).status_code == 200
+        with sqlite3.connect(app.state.auth_database_path) as db:
+            tokens = db.execute("SELECT COUNT(*) FROM media_tokens").fetchone()[0]
+        assert tokens == 2
+    finally:
+        app.state.mediamtx_enabled = False
+        app.state.mediamtx_playback_enabled = False
+        app.state.mediamtx_allowed_cidrs = []
+
+
 def test_stream_session_fails_closed_until_media_provider_is_configured():
     from uuid import uuid4
 

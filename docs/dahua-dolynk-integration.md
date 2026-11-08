@@ -24,11 +24,11 @@ Published onboarding may require:
 - Dahua's current support guidance distinguishes P2P (used by DMSS in local/non-account mode) from PaaS (used by DMSS in account mode). P2P devices may use the T2UServer protocol; P2P/PaaS server endpoints and firewall requirements vary by device capability. This network guidance is not a third-party SDK/API contract and must not be used to implement an undocumented client. DMSS consumer P2P and DoLynk enterprise APIs must be assessed separately.
 - Cloud account authorization, device online status, channel discovery, live video, playback and alarms are separate capabilities.
 - Until official credentials and the approved adapter are configured, backend status explicitly reports `not_configured`, `online=false`, `sdk_connected=false` and `cloud_video=false`. No successful connection is simulated.
-- API credentials and device passwords must not be stored in source control, logs or inventory responses. Persistent secrets require reviewed encryption/key management.
+- Until an approved cloud adapter is available, the Android form may collect the recorder admin username/password for the intended workflow, but does not transmit them to the backend. P2P registration sends only the serial identity. Device passwords and API credentials must not be stored in source control, logs or inventory responses. Any future adapter must use TLS and a reviewed short-lived secret-handling design.
 
 ## Molido API contract
 
-- `POST /api/v1/recorders` with `connection_method=dahua_p2p` registers the Dahua serial identity.
+- `POST /api/v1/recorders` with `connection_method=dahua_p2p` registers only the Dahua serial identity; it does not require or accept recorder credentials for inventory creation.
 - `GET /api/v1/recorders/{id}/p2p-status` reports integration readiness.
 - `POST /api/v1/recorders/{id}/p2p-connect-test` returns a clear not-configured response until the official API adapter and credentials are supplied.
 - The Dahua P2P mode is rejected for other brands.

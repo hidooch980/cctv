@@ -116,7 +116,7 @@ async def _onvif_discover(
     )
     profile_nodes = [node for node in profiles_xml.iter() if _local(node.tag) == "Profiles"]
     channels: list[dict[str, Any]] = []
-    for index, profile in enumerate(profile_nodes, start=1):
+    for index, profile in enumerate(profile_nodes[:128], start=1):
         token = profile.attrib.get("token")
         name = _text(profile, "Name") or f"Channel {index}"
         if not token:
@@ -166,7 +166,7 @@ async def _hikvision_probe(
             response.raise_for_status()
             channel_root = ET.fromstring(response.content)
             for node in channel_root.iter():
-                if _local(node.tag) in ("InputProxyChannel", "StreamingChannel"):
+                if _local(node.tag) in ("InputProxyChannel", "StreamingChannel") and len(channels) < 128:
                     number = _text(node, "id") or _text(node, "channelID") or str(len(channels) + 1)
                     channels.append({
                         "channel_number": int(number) if number.isdigit() else len(channels) + 1,
@@ -203,7 +203,7 @@ async def _dahua_probe(
     if channels_response.is_success:
         for line in channels_response.text.splitlines():
             match = re.search(r"ChannelTitle\[(\d+)\]\.Name=(.*)", line)
-            if match:
+            if match and len(channels) < 128:
                 channels[int(match.group(1)) + 1] = match.group(2).strip() or f"Channel {int(match.group(1)) + 1}"
     return AdapterResult(
         reachable=True, adapter="dahua_cgi", manufacturer="Dahua",
@@ -230,12 +230,20 @@ class RecorderAdapterRegistry:
                 try:
                     if "hikvision" in brand_key:
                         try:
-                            return await _hikvision_probe(client, base, username, password)
+                            vendor_result = await _hikvision_probe(client, base, username, password)
+                            if vendor_result.channels:
+                                return vendor_result
+                            warnings.extend(vendor_result.warnings)
+                            warnings.append("Trying ONVIF profile discovery for Hikvision recorder")
                         except (httpx.HTTPError, ET.ParseError, ValueError):
                             warnings.append("Hikvision ISAPI unavailable; trying ONVIF")
                     elif "dahua" in brand_key:
                         try:
-                            return await _dahua_probe(client, base, username, password)
+                            vendor_result = await _dahua_probe(client, base, username, password)
+                            if vendor_result.channels:
+                                return vendor_result
+                            warnings.extend(vendor_result.warnings)
+                            warnings.append("Trying ONVIF profile discovery for Dahua recorder")
                         except (httpx.HTTPError, ET.ParseError, ValueError):
                             warnings.append("Dahua CGI unavailable; trying ONVIF")
                     try:

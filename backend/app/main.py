@@ -117,8 +117,8 @@ class RecorderCreate(BaseModel):
         if self.connection_method == RecorderConnectionMethod.dahua_p2p:
             if self.brand.strip().lower() != "dahua":
                 raise ValueError("dahua_p2p connection is only valid for Dahua recorders")
-            if not self.serial_number or not self.username or not self.password:
-                raise ValueError("Dahua P2P requires serial_number, recorder username and recorder password")
+            if not self.serial_number:
+                raise ValueError("Dahua P2P registration requires the recorder serial number")
         return self
 
 

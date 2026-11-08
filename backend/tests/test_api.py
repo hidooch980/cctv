@@ -69,3 +69,17 @@ def test_delete_camera() -> None:
     camera_id = created.json()["id"]
     assert client.delete(f"/api/v1/cameras/{camera_id}").status_code == 204
     assert client.get(f"/api/v1/cameras/{camera_id}").status_code == 404
+
+def test_camera_capacity_is_limited_to_one_hundred() -> None:
+    for index in range(100):
+        response = client.post(
+            "/api/v1/cameras",
+            json={"name": f"Camera {index}", "brand": "Generic", "protocol": "rtsp", "host": f"192.0.2.{index + 1}"},
+        )
+        assert response.status_code == 201
+    overflow = client.post(
+        "/api/v1/cameras",
+        json={"name": "Overflow", "brand": "Generic", "protocol": "rtsp", "host": "198.51.100.1"},
+    )
+    assert overflow.status_code == 409
+    assert len(client.get("/api/v1/cameras").json()) == 100

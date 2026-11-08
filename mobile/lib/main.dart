@@ -69,7 +69,7 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> syncRecorders() async {
     try {
       final res = await http.get(Uri.parse('$apiBase/api/v1/recorders')).timeout(const Duration(seconds: 8));
-      if (res.statusCode != 200) throw Exception('HTTP \${res.statusCode}');
+      if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
       final data = (jsonDecode(res.body) as List).cast<Map<String,dynamic>>();
       if (mounted) setState(() { recorders..clear()..addAll(data); });
     } catch (_) {
@@ -95,10 +95,10 @@ class _DashboardPageState extends State<DashboardPage> {
     ));
     if(ok==true) {
       try {
-        final response=await http.post(Uri.parse('$apiBase/api/v1/recorders/\${recorder['id']}/connect-test'),
+        final response=await http.post(Uri.parse('$apiBase/api/v1/recorders/${recorder['id']}/connect-test'),
           headers:{'Content-Type':'application/json'},
           body:jsonEncode({'username':username.text,'password':password.text})).timeout(const Duration(seconds:20));
-        if(response.statusCode!=200) throw Exception('HTTP \${response.statusCode}');
+        if(response.statusCode!=200) throw Exception('HTTP ${response.statusCode}');
         final result=jsonDecode(response.body) as Map<String,dynamic>;
         final count=result['channel_count']??0;
         if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(
@@ -214,10 +214,10 @@ class _DashboardPageState extends State<DashboardPage> {
         };
         final response = await http.post(Uri.parse('$apiBase/api/v1/recorders'),
           headers:{'Content-Type':'application/json'},body:jsonEncode(payload)).timeout(const Duration(seconds:8));
-        if (response.statusCode != 201) throw Exception('HTTP \${response.statusCode}');
+        if (response.statusCode != 201) throw Exception('HTTP ${response.statusCode}');
         final created = jsonDecode(response.body) as Map<String,dynamic>;
         if(method=='ip') {
-          final tested=await http.post(Uri.parse('$apiBase/api/v1/recorders/\${created['id']}/connect-test'),
+          final tested=await http.post(Uri.parse('$apiBase/api/v1/recorders/${created['id']}/connect-test'),
             headers:{'Content-Type':'application/json'},
             body:jsonEncode({'username':username.text.trim(),'password':password.text})).timeout(const Duration(seconds:20));
           if(tested.statusCode==200) {
@@ -330,8 +330,8 @@ class _DashboardPageState extends State<DashboardPage> {
     ]),
     ...recorders.map((r)=>Card(child:ListTile(
       leading:const Icon(Icons.dvr,color:brandRed),
-      title:Text('\${r['name']} • \${r['recorder_type'].toString().toUpperCase()}'),
-      subtitle:Text('\${r['brand']} • \${r['connection_method']} • \${r['status']}\\n\${r['host']??r['serial_number']??''}',style:const TextStyle(fontSize:11)),
+      title:Text('${r['name']} • ${r['recorder_type'].toString().toUpperCase()}'),
+      subtitle:Text('${r['brand']} • ${r['connection_method']} • ${r['status']}\\n${r['host']??r['serial_number']??''}',style:const TextStyle(fontSize:11)),
       isThreeLine:true,
       trailing:IconButton(icon:const Icon(Icons.wifi_tethering),tooltip:language=='fa'?'تست اتصال':'Test connection',
         onPressed:()=>testRecorder(r)),

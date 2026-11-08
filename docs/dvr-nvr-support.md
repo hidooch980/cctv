@@ -58,4 +58,9 @@ ONVIF discovery/profile/media support, RTSP live streaming, and vendor-specific 
 - Load-test the intended number of recorders/channels and concurrent streams.
 
 ## Current implementation status
-This document records the product and integration contract. The product design supports both direct IP + port + device login and optional serial/device-ID pairing through documented vendor-supported methods. It does not claim that physical DVR/NVR connectivity, live streaming, recorded playback, disk telemetry, or vendor-specific discovery has been implemented or tested. Those require adapter code and authorized hardware/firmware test fixtures.
+- Backend recorder inventory endpoints are implemented for create/list/read/delete at `/api/v1/recorders`.
+- The backend accepts both direct IP login and serial/device-ID registration, and validates the required fields for each path.
+- The Android app includes a four-language DVR/NVR/XVR registration form with a selectable IP or serial connection method.
+- Submitted passwords and pairing codes are request-only fields; the recorder inventory database and API responses do not persist or expose them.
+- Registration currently records device configuration with `pending` status. It does not yet establish a live vendor session.
+- ONVIF/RTSP discovery, manufacturer P2P/SDK authentication, live streaming, recorded playback, disk telemetry and physical-device compatibility still require adapter implementation and authorized hardware/firmware tests.

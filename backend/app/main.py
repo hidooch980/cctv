@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, SecretStr, field_validator, model_validat
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.adapters import registry
+from app.streaming import DisabledStreamProvider, ProviderNotConfigured, StreamProfile, StreamTransport, StreamStartCommand
 
 
 class Settings(BaseSettings):
@@ -447,3 +448,69 @@ def list_recorder_channels(recorder_id: UUID) -> list[RecorderChannelRead]:
         )
         for row in rows
     ]
+
+
+
+class StreamStartRequest(BaseModel):
+    transport: StreamTransport = StreamTransport.webrtc
+    profile: StreamProfile = StreamProfile.sub
+    session_ttl_seconds: int = Field(default=300, ge=60, le=3600)
+
+
+@app.get("/api/v1/streaming/capabilities")
+def streaming_capabilities() -> dict:
+    """Expose the honest media-plane state; no live provider is configured yet."""
+    return {
+        "control_plane": "available",
+        "media_provider": "disabled",
+        "live_view": False,
+        "transports": [],
+        "profiles": [profile.value for profile in StreamProfile],
+        "session_ttl_seconds": {"minimum": 60, "maximum": 3600},
+        "authorization": "production user/site authorization is a required deployment gate",
+        "next_step": "Deploy and configure an authenticated media gateway and site connector.",
+    }
+
+
+@app.post("/api/v1/recorders/{recorder_id}/channels/{channel_id}/stream-sessions")
+async def start_stream_session(
+    recorder_id: UUID, channel_id: UUID, payload: StreamStartRequest
+) -> dict:
+    """Validate inventory references, then fail closed until auth and media provider exist."""
+    with db_connection() as db:
+        channel = db.execute(
+            """SELECT c.id,c.recorder_id,c.stream_uri,r.connection_method
+               FROM recorder_channels c JOIN recorders r ON r.id=c.recorder_id
+               WHERE c.id=? AND c.recorder_id=?""",
+            (str(channel_id), str(recorder_id)),
+        ).fetchone()
+    if channel is None:
+        raise HTTPException(status_code=404, detail="Recorder channel not found")
+    if channel["connection_method"] == RecorderConnectionMethod.dahua_p2p.value:
+        raise HTTPException(
+            status_code=501,
+            detail="Dahua P2P channel streaming requires the officially authorized Dahua cloud adapter.",
+        )
+    if not channel["stream_uri"]:
+        raise HTTPException(
+            status_code=409,
+            detail="No validated RTSP ingest URI is available for this channel. Run device discovery first.",
+        )
+    provider = DisabledStreamProvider()
+    try:
+        from datetime import datetime, timedelta, timezone
+        command = StreamStartCommand(
+            tenant_id="unassigned",
+            user_id="unauthenticated",
+            recorder_id=recorder_id,
+            channel_id=channel_id,
+            transport=payload.transport,
+            profile=payload.profile,
+            expires_at=datetime.now(timezone.utc) + timedelta(seconds=payload.session_ttl_seconds),
+        )
+        await provider.start(command)
+    except ProviderNotConfigured as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{exc} A production session is not issued; no stream is active.",
+        ) from exc

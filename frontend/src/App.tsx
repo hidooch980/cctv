@@ -7,6 +7,7 @@ import { PTZWidget } from './components/PTZWidget';
 import { EventFeed } from './components/EventFeed';
 import { OpenSDKModal } from './components/OpenSDKModal';
 import { AddCameraModal } from './components/AddCameraModal';
+import { LoginModal } from './components/LoginModal';
 
 const INITIAL_CAMERAS: Camera[] = [
   {
@@ -142,7 +143,13 @@ export function App() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [rightTab, setRightTab] = useState<'events' | 'ptz'>('events');
 
-  // Modals
+  // Modals & Auth State
+  const [currentUser, setCurrentUser] = useState<{ username: string; role: string; token: string } | null>({
+    username: 'admin',
+    role: 'admin',
+    token: 'default_admin_token',
+  });
+  const [isLoginOpen, setIsLoginOpen] = useState<boolean>(false);
   const [isDiagnoseOpen, setIsDiagnoseOpen] = useState<boolean>(false);
   const [initialDiagnoseCode, setInitialDiagnoseCode] = useState<string>('503');
   const [isAddCameraOpen, setIsAddCameraOpen] = useState<boolean>(false);
@@ -251,6 +258,9 @@ export function App() {
         onToggleLang={toggleLanguage}
         onOpenAddModal={() => setIsAddCameraOpen(true)}
         onOpenDiagnoseModal={() => handleOpenDiagnose('503')}
+        currentUser={currentUser}
+        onOpenLoginModal={() => setIsLoginOpen(true)}
+        onLogout={() => setCurrentUser(null)}
       />
 
       <div className="main-viewport">
@@ -378,6 +388,17 @@ export function App() {
         isOpen={isAddCameraOpen}
         onClose={() => setIsAddCameraOpen(false)}
         onCameraAdded={handleCameraAdded}
+        lang={lang}
+      />
+
+      {/* Login & QR Auth Modal */}
+      <LoginModal
+        isOpen={isLoginOpen}
+        onClose={() => setIsLoginOpen(false)}
+        onLoginSuccess={(user) => {
+          setCurrentUser(user);
+          setIsLoginOpen(false);
+        }}
         lang={lang}
       />
     </div>

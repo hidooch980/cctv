@@ -10,6 +10,9 @@ interface TopNavProps {
   onToggleLang: () => void;
   onOpenAddModal: () => void;
   onOpenDiagnoseModal: () => void;
+  currentUser: { username: string; role: string } | null;
+  onOpenLoginModal: () => void;
+  onLogout: () => void;
 }
 
 export const TopNav: React.FC<TopNavProps> = ({
@@ -20,6 +23,9 @@ export const TopNav: React.FC<TopNavProps> = ({
   onToggleLang,
   onOpenAddModal,
   onOpenDiagnoseModal,
+  currentUser,
+  onOpenLoginModal,
+  onLogout,
 }) => {
   const t = getTranslation(lang);
 
@@ -106,6 +112,27 @@ export const TopNav: React.FC<TopNavProps> = ({
         <button className="btn btn-primary" onClick={onOpenAddModal}>
           + {t.addCamera}
         </button>
+
+        {/* Login / User Profile Button */}
+        {currentUser ? (
+          <button
+            className="btn btn-secondary"
+            onClick={onLogout}
+            title={t.logout}
+            style={{ borderColor: 'rgba(16, 185, 129, 0.4)', color: '#34d399' }}
+          >
+            👤 {currentUser.username} ({t.logout})
+          </button>
+        ) : (
+          <button
+            className="btn btn-secondary"
+            onClick={onOpenLoginModal}
+            title={t.login}
+            style={{ borderColor: 'var(--border-active)', color: '#60a5fa' }}
+          >
+            🔐 {t.login}
+          </button>
+        )}
 
         {/* Language Switcher */}
         <button

@@ -36,3 +36,19 @@ class UserResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class QRSessionResponse(BaseModel):
+    session_id: str
+    qr_payload: str
+    expires_in_seconds: int = 120
+
+
+class QRStatusResponse(BaseModel):
+    session_id: str
+    status: str  # pending, scanned, approved, expired
+    token: Optional[Token] = None
+
+
+class QRAuthorizeRequest(BaseModel):
+    session_id: str

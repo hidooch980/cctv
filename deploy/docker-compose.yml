@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: molido-cctv-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PROJECT_NAME=Molido CCTV AI
+      - DATABASE_URL=sqlite+aiosqlite:///./data/cctv.db
+      - MAX_CAMERAS_CAPACITY=100
+      - SECRET_KEY=${SECRET_KEY:-molido-production-secret-key-change-me-32chars}
+    volumes:
+      - cctv_data:/app/data
+      - cctv_storage:/app/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: molido-cctv-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  cctv_data:
+  cctv_storage:
